@@ -314,7 +314,7 @@ fun SimpleLoginScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                     }
-                    Text("Iniciar Sesión")
+                    Text("Iniciar Sesión---->")
                 }
                 
                 // Botón de registro
