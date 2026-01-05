@@ -1,0 +1,646 @@
+package com.example.nexogo.ui.screens.appointments
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import java.util.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.nexogo.modules.appointments.AppointmentViewModel
+import com.example.nexogo.core.firebase.DateFilterDiagnostics
+import com.example.nexogo.model.Appointment
+import android.util.Log
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AppointmentsScreen(
+    onNavigateBack: () -> Unit,
+    onNavigateToCreateAppointment: () -> Unit = {}
+) {
+    println("DEBUG: AppointmentsScreen - Iniciando composición")
+    
+    // Usar AppointmentViewModel del módulo appointments
+    val appointmentViewModel = remember { AppointmentViewModel() }
+    println("DEBUG: AppointmentsScreen - AppointmentViewModel obtenido")
+
+    val appointments by appointmentViewModel.appointments.collectAsStateWithLifecycle()
+    val isLoading by appointmentViewModel.isLoading.collectAsStateWithLifecycle()
+    val message by appointmentViewModel.message.collectAsStateWithLifecycle()
+    
+    println("DEBUG: AppointmentsScreen - Appointments obtenido: ${appointments.size}")
+    println("DEBUG: AppointmentsScreen - IsLoading: $isLoading")
+    println("DEBUG: AppointmentsScreen - Message: $message")
+    
+    // Cargar citas al inicializar
+    LaunchedEffect(Unit) {
+        try {
+            println("DEBUG: AppointmentsScreen - Cargando citas...")
+            appointmentViewModel.loadAppointments()
+        } catch (e: Exception) {
+            println("DEBUG: AppointmentsScreen - Error cargando citas: ${e.message}")
+            e.printStackTrace()
+        }
+    }
+    
+    var selectedDate by remember { mutableStateOf(Date()) }
+    
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var appointmentToDelete by remember { mutableStateOf<com.example.nexogo.model.Appointment?>(null) }
+    var showEditScreen by remember { mutableStateOf(false) }
+    var appointmentToEdit by remember { mutableStateOf<com.example.nexogo.model.Appointment?>(null) }
+    
+    // Pantalla con todos los ViewModels agregados
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Gestión de Citas") },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
+                    }
+                }
+            )
+        }
+    ) { paddingValues ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            item {
+                Text(
+                    text = "Gestión de Citas",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+            
+            // Indicador de carga
+            if (isLoading) {
+                item {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        CircularProgressIndicator()
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Cargando citas...")
+                    }
+                }
+            }
+            
+            // Mostrar mensaje si existe
+            if (message.isNotEmpty()) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (message.contains("Error")) 
+                                MaterialTheme.colorScheme.errorContainer 
+                            else 
+                                MaterialTheme.colorScheme.primaryContainer
+                        )
+                    ) {
+                        Text(
+                            text = message,
+                            modifier = Modifier.padding(16.dp),
+                            color = if (message.contains("Error")) 
+                                MaterialTheme.colorScheme.onErrorContainer 
+                            else 
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+            }
+            
+            // Mostrar número de citas
+            item {
+                Text(
+                    text = "Citas encontradas: ${appointments.size}",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            
+            // Lista de citas
+            if (appointments.isEmpty() && !isLoading) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "📅 No hay citas programadas",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Las citas aparecerán aquí cuando se programen",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            } else {
+                items(appointments) { appointment ->
+                    AppointmentCard(
+                        appointment = appointment,
+                        onEdit = { appointmentToEdit = appointment; showEditScreen = true },
+                        onDelete = { appointmentToDelete = appointment; showDeleteDialog = true }
+                    )
+                }
+            }
+            
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+            
+            // Calendario de citas
+            item {
+                Text(
+                    text = "Calendario de Citas",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            
+            item {
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+            
+            item {
+                SimpleCalendarGrid(
+                    selectedDate = selectedDate,
+                    appointments = appointments,
+                    onDateSelected = { date ->
+                        selectedDate = date
+                    }
+                )
+            }
+            
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+            
+            // Lista de citas para el día seleccionado
+            val appointmentsForSelectedDate = appointments.filter { appointment ->
+                val appointmentDate = appointment.dateTime.toDate()
+                val dayMatch = appointmentDate.date == selectedDate.date
+                val monthMatch = appointmentDate.month == selectedDate.month
+                val yearMatch = appointmentDate.year == selectedDate.year
+                val allMatch = dayMatch && monthMatch && yearMatch
+                
+                // Diagnóstico para debugging
+                if (appointments.isNotEmpty()) {
+                    DateFilterDiagnostics.diagnoseDateFiltering(appointment, selectedDate)
+                }
+                
+                allMatch
+            }
+            
+            // Diagnóstico adicional
+            if (appointments.isNotEmpty()) {
+                DateFilterDiagnostics.testDifferentFilteringMethods(appointments, selectedDate)
+                val report = DateFilterDiagnostics.generateAppointmentsDateReport(appointments)
+                Log.d("NEXOGO_APPT", "📊 Reporte de fechas:\n$report")
+            }
+            
+            Text(
+                text = "Citas del ${selectedDate.date}/${selectedDate.month + 1}/${selectedDate.year + 1900} (${appointmentsForSelectedDate.size} encontradas)",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+            
+            // Logs de debugging
+            Log.d("NEXOGO_APPT", "🔍 FILTRADO DE CITAS:")
+            Log.d("NEXOGO_APPT", "   - Total de citas: ${appointments.size}")
+            Log.d("NEXOGO_APPT", "   - Fecha seleccionada: ${selectedDate.date}/${selectedDate.month + 1}/${selectedDate.year + 1900}")
+            Log.d("NEXOGO_APPT", "   - Citas filtradas: ${appointmentsForSelectedDate.size}")
+            
+            appointments.forEach { appointment ->
+                val appointmentDate = appointment.dateTime.toDate()
+                Log.d("NEXOGO_APPT", "   - Cita: ${appointment.patientName} - ${appointmentDate.date}/${appointmentDate.month + 1}/${appointmentDate.year + 1900}")
+            }
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            // Mostrar citas con Column simple
+            if (appointmentsForSelectedDate.isNotEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 200.dp, max = 400.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                            appointmentsForSelectedDate.forEach { appointment ->
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                    ),
+                                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(12.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column(
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Text(
+                                                    text = "Cita: ${appointment.reason}",
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                                Text(
+                                                    text = "Mascota: ${appointment.patientName.ifEmpty { "No especificada" }}",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Text(
+                                                    text = "Fecha: ${appointment.dateTime.toDate()}",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                IconButton(
+                                                    onClick = {
+                                                        appointmentToEdit = appointment
+                                                        showEditScreen = true
+                                                    }
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.Edit,
+                                                        contentDescription = "Editar cita",
+                                                        tint = MaterialTheme.colorScheme.primary
+                                                    )
+                                                }
+
+                                                IconButton(
+                                                    onClick = {
+                                                        appointmentToDelete = appointment
+                                                        showDeleteDialog = true
+                                                    }
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.Delete,
+                                                        contentDescription = "Eliminar cita",
+                                                        tint = MaterialTheme.colorScheme.error
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                }
+            } else {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "No hay citas programadas para este día",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "Selecciona otro día en el calendario o agrega una nueva cita",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Botones de acción
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text = "Acciones",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = onNavigateToCreateAppointment,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            )
+                        ) {
+                            Text("Agregar Cita")
+                        }
+                    }
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            Button(
+                onClick = onNavigateBack
+            ) {
+                Text("Volver")
+            }
+        }
+    }
+    
+    // Diálogo de confirmación para eliminar
+    if (showDeleteDialog && appointmentToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { 
+                showDeleteDialog = false
+                appointmentToDelete = null
+            },
+            title = { Text("Eliminar Cita") },
+            text = { Text("¿Estás seguro de que quieres eliminar esta cita?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        appointmentToDelete?.let { appointment ->
+                            appointmentViewModel.deleteAppointment(appointment.id)
+                        }
+                        showDeleteDialog = false
+                        appointmentToDelete = null
+                    }
+                ) {
+                    Text("Eliminar")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteDialog = false
+                        appointmentToDelete = null
+                    }
+                ) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+    
+    // Pantalla de edición - Temporalmente deshabilitada
+    if (showEditScreen && appointmentToEdit != null) {
+        // TODO: Implementar pantalla de edición compatible con core.models.Appointment
+        Card(
+            modifier = Modifier.fillMaxSize(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            )
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Editar Cita",
+                    style = MaterialTheme.typography.headlineMedium
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "Funcionalidad de edición en desarrollo",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(
+                    onClick = {
+                        showEditScreen = false
+                        appointmentToEdit = null
+                    }
+                ) {
+                    Text("Cerrar")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SimpleCalendarGrid(
+    selectedDate: Date,
+    appointments: List<com.example.nexogo.model.Appointment>,
+    onDateSelected: (Date) -> Unit
+) {
+    val calendar = Calendar.getInstance()
+    calendar.time = selectedDate
+    
+    val currentMonth = calendar.get(Calendar.MONTH)
+    val currentYear = calendar.get(Calendar.YEAR)
+    
+    // Crear calendario para el mes actual
+    calendar.set(Calendar.DAY_OF_MONTH, 1)
+    val firstDayOfWeek = calendar.get(Calendar.DAY_OF_WEEK)
+    val daysInMonth = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
+    
+    Column {
+        // Encabezados de días de la semana
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            listOf("Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb").forEach { day ->
+                Text(
+                    text = day,
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        // Días del mes
+        var dayOfMonth = 1
+        repeat(6) { week ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                repeat(7) { dayOfWeek ->
+                    if (week == 0 && dayOfWeek < firstDayOfWeek - 1) {
+                        // Espacios vacíos antes del primer día del mes
+                        Box(modifier = Modifier.weight(1f).height(40.dp))
+                    } else if (dayOfMonth <= daysInMonth) {
+                        val dayDate = Calendar.getInstance().apply {
+                            set(Calendar.YEAR, currentYear)
+                            set(Calendar.MONTH, currentMonth)
+                            set(Calendar.DAY_OF_MONTH, dayOfMonth)
+                        }.time
+                        
+                        val isSelected = dayDate.date == selectedDate.date
+                        val hasAppointments = appointments.any { appointment ->
+                            val appointmentDate = appointment.dateTime.toDate()
+                            appointmentDate.date == dayDate.date
+                        }
+                        
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(40.dp)
+                                .clickable { onDateSelected(dayDate) }
+                                .background(
+                                    color = when {
+                                        isSelected -> MaterialTheme.colorScheme.primary
+                                        hasAppointments -> MaterialTheme.colorScheme.secondaryContainer
+                                        else -> Color.Transparent
+                                    },
+                                    shape = CircleShape
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = dayOfMonth.toString(),
+                                color = when {
+                                    isSelected -> MaterialTheme.colorScheme.onPrimary
+                                    hasAppointments -> MaterialTheme.colorScheme.onSecondaryContainer
+                                    else -> MaterialTheme.colorScheme.onSurface
+                                }
+                            )
+                        }
+                        dayOfMonth++
+                    } else {
+                        // Espacios vacíos después del último día del mes
+                        Box(modifier = Modifier.weight(1f).height(40.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun AppointmentCard(
+    appointment: com.example.nexogo.model.Appointment,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = appointment.patientName,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                
+                Row {
+                    IconButton(onClick = onEdit) {
+                        Icon(Icons.Default.Edit, contentDescription = "Editar")
+                    }
+                    IconButton(onClick = onDelete) {
+                        Icon(Icons.Default.Delete, contentDescription = "Eliminar")
+                    }
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Text(
+                text = "Fecha: ${appointment.dateTime.toDate()}",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            
+            if (appointment.notes.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Notas: ${appointment.notes}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Estado: ${appointment.status.name}",
+                style = MaterialTheme.typography.bodySmall,
+                color = when (appointment.status) {
+                    com.example.nexogo.model.AppointmentStatus.SCHEDULED -> MaterialTheme.colorScheme.primary
+                    com.example.nexogo.model.AppointmentStatus.COMPLETED -> Color.Green
+                    com.example.nexogo.model.AppointmentStatus.CANCELLED -> Color.Red
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                }
+            )
+        }
+    }
+}
+
+// Función para obtener el nombre de la mascota por ID
+private fun getPetNameById(petId: String, patients: List<com.example.nexogo.core.models.Patient>): String {
+    val pet = patients.find { it.id == petId }
+    return pet?.name ?: "Mascota no encontrada"
+}

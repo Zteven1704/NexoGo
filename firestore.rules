@@ -1,0 +1,194 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Reglas para usuarios
+    match /users/{userId} {
+      // Permitir lectura y escritura solo al usuario autenticado propietario del documento
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      // Permitir creación de nuevos usuarios (registro)
+      allow create: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Reglas para usuarios (colección en español)
+    match /usuarios/{userId} {
+      // Permitir lectura y escritura solo al usuario autenticado propietario del documento
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      // Permitir creación de nuevos usuarios (registro)
+      allow create: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Reglas para pacientes - TEMPORALMENTE MÁS PERMISIVAS PARA DEBUG
+    match /patients/{patientId} {
+      // Permitir lectura y escritura a todos los usuarios autenticados temporalmente
+      allow read, write: if request.auth != null;
+      
+      // Permitir creación de pacientes
+      allow create: if request.auth != null;
+    }
+    
+    // Reglas para citas - TEMPORALMENTE MÁS PERMISIVAS PARA DEBUG
+    match /appointments/{appointmentId} {
+      // Permitir lectura y escritura a todos los usuarios autenticados temporalmente
+      allow read, write: if request.auth != null;
+      
+      // Permitir creación de citas
+      allow create: if request.auth != null;
+    }
+    
+    // Reglas para citas (colección en español)
+    match /citas/{appointmentId} {
+      // Permitir lectura y escritura a todos los usuarios autenticados temporalmente
+      allow read, write: if request.auth != null;
+      
+      // Permitir creación de citas
+      allow create: if request.auth != null;
+    }
+    
+    // Reglas para historial clínico (módulo completo)
+    match /clinical_records/{recordId} {
+      // Lectura: propietario o roles con permisos especiales
+      allow read: if request.auth != null
+        && (
+          // El propietario puede ver el historial de sus mascotas
+          resource.data.ownerId == request.auth.uid
+          // Roles con permisos especiales
+          || get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role in ['ADMIN', 'VET', 'ASSISTANT']
+        );
+      
+      // Escritura: solo veterinarios y administradores
+      allow create, update, delete: if request.auth != null
+        && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role in ['ADMIN', 'VET'];
+    }
+    
+    // Subcolección de adjuntos (si aplica)
+    match /clinical_records/{recordId}/attachments/{fileId} {
+      allow read, write: if request.auth != null
+        && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role in ['ADMIN', 'VET', 'ASSISTANT'];
+    }
+    
+    // Reglas para inventario (módulo completo)
+    match /inventory/{productId} {
+      // Lectura: profesionales y asistentes
+      allow read: if request.auth != null
+        && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role in ['ADMIN', 'VET', 'ASSISTANT'];
+      
+      // Escritura: solo administradores y veterinarios
+      allow create, update, delete: if request.auth != null
+        && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role in ['ADMIN', 'VET'];
+    }
+    
+    // Reglas para inventario (colección en español)
+    match /inventario/{productId} {
+      // Lectura: profesionales y asistentes
+      allow read: if request.auth != null
+        && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role in ['ADMIN', 'VET', 'ASSISTANT'];
+      
+      // Escritura: solo administradores y veterinarios
+      allow create, update, delete: if request.auth != null
+        && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role in ['ADMIN', 'VET'];
+    }
+    
+    // Reglas para categorías
+    match /categories/{categoryId} {
+      // Lectura: todos los usuarios autenticados
+      allow read: if request.auth != null;
+      
+      // Escritura: solo administradores
+      allow create, update, delete: if request.auth != null
+        && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role == 'ADMIN';
+    }
+    
+    // Reglas para ventas
+    match /sales/{saleId} {
+      // Solo profesionales pueden gestionar ventas
+      allow read, write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['ADMINISTRATOR', 'VETERINARIAN', 'ASSISTANT'];
+      
+      // Los pacientes pueden leer sus propias ventas
+      allow read: if request.auth != null && 
+        resource.data.customerId == request.auth.uid;
+    }
+    
+    // Reglas para mensajes de chat
+    match /messages/{messageId} {
+      // Los usuarios pueden leer/escribir mensajes donde participan
+      allow read, write: if request.auth != null && 
+        (resource.data.senderId == request.auth.uid || 
+         resource.data.receiverId == request.auth.uid ||
+         request.auth.uid in resource.data.participants);
+    }
+    
+    // Reglas para chats
+    match /chats/{chatId} {
+      // Los usuarios pueden leer/escribir chats donde participan
+      allow read, write: if request.auth != null && 
+        (request.auth.uid in resource.data.participants ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['ADMINISTRATOR', 'VETERINARIAN', 'ASSISTANT']);
+    }
+    
+    // Reglas para configuración
+    match /config/{configId} {
+      // Solo administradores pueden gestionar configuración
+      allow read, write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMINISTRATOR';
+    }
+    
+    // Reglas para notificaciones
+    match /notifications/{notificationId} {
+      // Los usuarios pueden leer sus propias notificaciones
+      allow read, write: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+      
+      // Permitir creación de notificaciones
+      allow create: if request.auth != null;
+    }
+    
+    // Reglas para reportes
+    match /reports/{reportId} {
+      // Solo profesionales pueden acceder a reportes
+      allow read, write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['ADMINISTRATOR', 'VETERINARIAN', 'ASSISTANT'];
+    }
+    
+    // Regla por defecto - TEMPORALMENTE PERMISIVA PARA DEBUG
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Reglas temporales más permisivas para debug
+    match /usuarios/{userId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    match /citas/{appointmentId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    match /inventario/{productId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    match /patients/{patientId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    match /clinical_records/{recordId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    match /sales/{saleId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    match /messages/{messageId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    match /chats/{chatId} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

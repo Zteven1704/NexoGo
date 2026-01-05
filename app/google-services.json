@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "83060710795",
+    "project_id": "nexogo-82003",
+    "storage_bucket": "nexogo-82003.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:83060710795:android:02d10cd51fabedd253638e",
+        "android_client_info": {
+          "package_name": "com.example.nexogo"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAr32IMU2630i-GOSycSIcigQ-TkQyLq7Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

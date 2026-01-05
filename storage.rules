@@ -1,0 +1,118 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Reglas para imágenes de perfil de usuarios
+    match /users/{userId}/profile/{fileName} {
+      // Solo el usuario propietario puede subir/editar/eliminar su imagen de perfil
+      allow read, write, delete: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Reglas para imágenes de pacientes
+    match /patients/{patientId}/images/{fileName} {
+      // Los propietarios del paciente y profesionales pueden gestionar imágenes
+      allow read, write, delete: if request.auth != null && 
+        (request.auth.uid == resource.metadata.ownerId ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['ADMINISTRATOR', 'VETERINARIAN', 'ASSISTANT']);
+    }
+    
+    // Reglas para archivos del historial clínico (módulo completo)
+    match /medical_records/{recordId}/files/{fileName} {
+      // Lectura: propietario o roles con permisos
+      allow read: if request.auth != null
+        && (
+          // El dueño de la mascota puede leer
+          get(/databases/(default)/documents/clinical_records/$(recordId)).data.ownerId == request.auth.uid
+          // Roles con permiso
+          || get(/databases/(default)/documents/users/$(request.auth.uid)).data.role in ['ADMINISTRATOR', 'VETERINARIAN', 'ASSISTANT']
+        );
+      // Escritura: solo veterinarios y administradores
+      allow write, delete: if request.auth != null
+        && get(/databases/(default)/documents/users/$(request.auth.uid)).data.role in ['ADMINISTRATOR', 'VETERINARIAN'];
+    }
+
+    // PDFs generados del historial clínico
+    match /medical_records/{recordId}/pdfs/{fileName} {
+      // Lectura: propietario o roles con permisos
+      allow read: if request.auth != null
+        && (
+          get(/databases/(default)/documents/clinical_records/$(recordId)).data.ownerId == request.auth.uid
+          || get(/databases/(default)/documents/users/$(request.auth.uid)).data.role in ['ADMINISTRATOR', 'VETERINARIAN', 'ASSISTANT']
+        );
+      // Escritura: solo veterinarios y administradores
+      allow write: if request.auth != null
+        && get(/databases/(default)/documents/users/$(request.auth.uid)).data.role in ['ADMINISTRATOR', 'VETERINARIAN'];
+    }
+    
+    // Miniaturas de archivos del historial
+    match /medical_records/{recordId}/thumbs/{fileName} {
+      // Lectura: propietario o roles con permisos
+      allow read: if request.auth != null
+        && (
+          get(/databases/(default)/documents/clinical_records/$(recordId)).data.ownerId == request.auth.uid
+          || get(/databases/(default)/documents/users/$(request.auth.uid)).data.role in ['ADMINISTRATOR', 'VETERINARIAN', 'ASSISTANT']
+        );
+      // Escritura: solo veterinarios y administradores
+      allow write: if request.auth != null
+        && get(/databases/(default)/documents/users/$(request.auth.uid)).data.role in ['ADMINISTRATOR', 'VETERINARIAN'];
+    }
+    
+    // Reglas para imágenes de productos del inventario (módulo completo)
+    match /inventory/{productId}/{fileName} {
+      // Lectura: profesionales y asistentes
+      allow read: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['ADMINISTRATOR', 'VETERINARIAN', 'ASSISTANT'];
+      
+      // Escritura: solo administradores y veterinarios
+      allow write, delete: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['ADMINISTRATOR', 'VETERINARIAN'];
+    }
+    
+    // Reglas para archivos de chat
+    match /chats/{chatId}/files/{fileName} {
+      // Los participantes del chat pueden gestionar archivos
+      allow read, write, delete: if request.auth != null && 
+        (request.auth.uid in resource.metadata.participants ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['ADMINISTRATOR', 'VETERINARIAN', 'ASSISTANT']);
+    }
+    
+    // Reglas para documentos de ventas
+    match /sales/{saleId}/documents/{fileName} {
+      // Solo profesionales pueden gestionar documentos de ventas
+      allow read, write, delete: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['ADMINISTRATOR', 'VETERINARIAN', 'ASSISTANT'];
+      
+      // Los clientes pueden leer sus propios documentos
+      allow read: if request.auth != null && 
+        request.auth.uid == resource.metadata.customerId;
+    }
+    
+    // Reglas para reportes
+    match /reports/{reportId}/files/{fileName} {
+      // Solo profesionales pueden gestionar archivos de reportes
+      allow read, write, delete: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['ADMINISTRATOR', 'VETERINARIAN', 'ASSISTANT'];
+    }
+    
+    // Reglas para archivos temporales
+    match /temp/{userId}/{fileName} {
+      // Los usuarios pueden gestionar sus archivos temporales
+      allow read, write, delete: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Reglas para archivos públicos (como logos, imágenes de la app)
+    match /public/{fileName} {
+      // Todos los usuarios autenticados pueden leer archivos públicos
+      allow read: if request.auth != null;
+      
+      // Solo administradores pueden subir archivos públicos
+      allow write, delete: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMINISTRATOR';
+    }
+    
+    // Regla por defecto - denegar todo lo demás
+    match /{allPaths=**} {
+      allow read, write, delete: if false;
+    }
+  }
+}

@@ -1,0 +1,101 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Función para verificar si el usuario está autenticado
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Función para verificar el rol del usuario desde Firestore
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    
+    // Función para verificar si es admin
+    function isAdmin() {
+      return isAuthenticated() && getUserRole() == 'admin';
+    }
+    
+    // Función para verificar si es veterinario o asistente
+    function isVetOrAssistant() {
+      return isAuthenticated() && (getUserRole() == 'vet' || getUserRole() == 'assistant');
+    }
+    
+    // Función para verificar si es paciente
+    function isPatient() {
+      return isAuthenticated() && getUserRole() == 'patient';
+    }
+    
+    // Función para verificar si el usuario es el propietario del recurso
+    function isOwner(resource) {
+      return isAuthenticated() && resource.data.ownerId == request.auth.uid;
+    }
+    
+    // Función para verificar si el usuario es participante del chat
+    function isChatParticipant(resource) {
+      return isAuthenticated() && request.auth.uid in resource.data.participants;
+    }
+    
+    // Reglas para la colección de usuarios
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (userId == request.auth.uid || isAdmin());
+      allow write: if isAuthenticated() && userId == request.auth.uid;
+      allow create: if isAuthenticated() && userId == request.auth.uid;
+      allow delete: if isAdmin();
+    }
+    
+    // Reglas para la colección de pacientes
+    match /patients/{patientId} {
+      allow read: if isAuthenticated() && (isVetOrAssistant() || isAdmin() || isOwner(resource));
+      allow write: if isAuthenticated() && (isVetOrAssistant() || isAdmin());
+      allow create: if isAuthenticated() && (isVetOrAssistant() || isAdmin());
+      allow delete: if isAdmin();
+    }
+    
+    // Reglas para la colección de citas
+    match /appointments/{appointmentId} {
+      allow read: if isAuthenticated() && (isVetOrAssistant() || isAdmin() || isOwner(resource));
+      allow write: if isAuthenticated() && (isVetOrAssistant() || isAdmin());
+      allow create: if isAuthenticated() && (isVetOrAssistant() || isAdmin());
+      allow delete: if isAdmin();
+    }
+    
+    // Reglas para la colección de inventario
+    match /inventory/{productId} {
+      allow read: if isAuthenticated() && (isVetOrAssistant() || isAdmin());
+      allow write: if isAuthenticated() && (isVetOrAssistant() || isAdmin());
+      allow create: if isAuthenticated() && (isVetOrAssistant() || isAdmin());
+      allow delete: if isAdmin();
+    }
+    
+    // Reglas para la colección de ventas
+    match /sales/{saleId} {
+      allow read: if isAuthenticated() && (isVetOrAssistant() || isAdmin() || isOwner(resource));
+      allow write: if isAuthenticated() && (isVetOrAssistant() || isAdmin());
+      allow create: if isAuthenticated() && (isVetOrAssistant() || isAdmin());
+      allow delete: if isAdmin();
+    }
+    
+    // Reglas para la colección de chat
+    match /chat/{chatId} {
+      allow read, write: if isAuthenticated() && isChatParticipant(resource);
+      allow create: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+    
+    // Reglas para la colección de configuración
+    match /configuration/{configId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isAdmin();
+      allow create: if isAuthenticated() && isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // Reglas para la colección de test (solo para desarrollo)
+    match /test/{document} {
+      allow read, write: if isAuthenticated();
+    }
+  }
+}
+

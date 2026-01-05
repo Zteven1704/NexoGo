@@ -1,0 +1,11 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Reglas temporales - PERMITIR TODO A USUARIOS AUTENTICADOS
+    // Esto resuelve el error PERMISSION_DENIED
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
+
