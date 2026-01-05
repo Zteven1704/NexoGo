@@ -1,0 +1,193 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function para obtener el rol del usuario
+    // Primero intenta obtener de custom claims, luego del documento users
+    function getUserRole() {
+      // Intentar obtener de custom claims (más seguro y rápido)
+      let customRole = request.auth.token.role;
+      if (customRole != null) {
+        return customRole;
+      }
+      
+      // Fallback: leer del documento users (menos eficiente pero funciona)
+      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
+      return userDoc != null ? userDoc.data.role : null;
+    }
+    
+    function isAdmin() {
+      return getUserRole() == 'ADMIN';
+    }
+    
+    function isVet() {
+      return getUserRole() == 'VET';
+    }
+    
+    function isAssistant() {
+      return getUserRole() == 'VET_ASSISTANT';
+    }
+    
+    function isVetOrAssistant() {
+      return isVet() || isAssistant();
+    }
+    
+    function isProfessional() {
+      return isAdmin() || isVetOrAssistant();
+    }
+    
+    // Users: admin puede leer/escribir todos, usuario puede leer/escribir su propio perfil
+    match /users/{userId} {
+      allow read: if request.auth != null && (
+        request.auth.uid == userId || 
+        isAdmin()
+      );
+      allow write: if request.auth != null && (
+        request.auth.uid == userId || 
+        isAdmin()
+      );
+      allow create: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Usuarios (colección en español)
+    match /usuarios/{userId} {
+      allow read: if request.auth != null && (
+        request.auth.uid == userId || 
+        isAdmin()
+      );
+      allow write: if request.auth != null && (
+        request.auth.uid == userId || 
+        isAdmin()
+      );
+      allow create: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Historiales clínicos: solo propietario o vets/admin pueden leer, writes solo vets/admin
+    match /historiales/{docId} {
+      allow read: if request.auth != null && (
+        resource.data.ownerId == request.auth.uid ||
+        isProfessional()
+      );
+      allow write: if request.auth != null && (
+        isAdmin() || isVet()
+      );
+    }
+    
+    match /clinical_records/{recordId} {
+      allow read: if request.auth != null && (
+        resource.data.ownerId == request.auth.uid ||
+        isProfessional()
+      );
+      allow write: if request.auth != null && (
+        isAdmin() || isVet()
+      );
+    }
+    
+    // Domicilios: owner puede crear/leer propio; admin/vet/assistant pueden leer/actualizar
+    match /domicilios/{domId} {
+      allow create: if request.auth != null;
+      
+      allow read: if request.auth != null && (
+        resource.data.usuarioId == request.auth.uid ||
+        isProfessional()
+      );
+      
+      allow update: if request.auth != null && (
+        // Admin puede hacer cualquier cambio
+        isAdmin() ||
+        // Vet/Assistant solo puede cambiar a EN_CAMINO o FINALIZADO
+        (isVetOrAssistant() && 
+         request.resource.data.estado in ['EN_CAMINO', 'FINALIZADO']) ||
+        // Usuario puede cancelar su propia solicitud pendiente
+        (resource.data.usuarioId == request.auth.uid &&
+         resource.data.estado == 'PENDIENTE' &&
+         request.resource.data.estado == 'CANCELADO')
+      );
+      
+      allow delete: if request.auth != null && (
+        isAdmin() ||
+        (resource.data.usuarioId == request.auth.uid && resource.data.estado == 'PENDIENTE')
+      );
+    }
+    
+    // Citas: usuarios pueden crear/leer propias, profesionales pueden leer/escribir todas
+    match /citas/{appointmentId} {
+      allow create: if request.auth != null;
+      allow read: if request.auth != null && (
+        resource.data.usuarioId == request.auth.uid ||
+        isProfessional()
+      );
+      allow write: if request.auth != null && (
+        resource.data.usuarioId == request.auth.uid ||
+        isProfessional()
+      );
+    }
+    
+    match /appointments/{appointmentId} {
+      allow create: if request.auth != null;
+      allow read: if request.auth != null && (
+        resource.data.userId == request.auth.uid ||
+        isProfessional()
+      );
+      allow write: if request.auth != null && (
+        resource.data.userId == request.auth.uid ||
+        isProfessional()
+      );
+    }
+    
+    // Inventario: solo profesionales pueden acceder
+    match /inventario/{productId} {
+      allow read: if request.auth != null && isProfessional();
+      allow write: if request.auth != null && (isAdmin() || isVet());
+    }
+    
+    match /inventory/{productId} {
+      allow read: if request.auth != null && isProfessional();
+      allow write: if request.auth != null && (isAdmin() || isVet());
+    }
+    
+    // Pacientes: propietario o profesionales pueden leer, solo profesionales pueden escribir
+    match /patients/{patientId} {
+      allow read: if request.auth != null && (
+        resource.data.ownerId == request.auth.uid ||
+        isProfessional()
+      );
+      allow write: if request.auth != null && isProfessional();
+    }
+    
+    // Ventas: profesionales pueden gestionar, clientes pueden leer propias
+    match /sales/{saleId} {
+      allow read: if request.auth != null && (
+        resource.data.customerId == request.auth.uid ||
+        isProfessional()
+      );
+      allow write: if request.auth != null && isProfessional();
+    }
+    
+    // Chats y mensajes: participantes pueden leer/escribir
+    match /chats/{chatId} {
+      allow read, write: if request.auth != null && (
+        request.auth.uid in resource.data.participants ||
+        isAdmin()
+      );
+    }
+    
+    match /messages/{messageId} {
+      allow read, write: if request.auth != null && (
+        resource.data.senderId == request.auth.uid ||
+        resource.data.receiverId == request.auth.uid ||
+        isAdmin()
+      );
+    }
+    
+    // Regla por defecto - denegar todo lo demás
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
+
+
+
