@@ -1,0 +1,348 @@
+package com.example.nexogo.modules.domicilios.ui
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.nexogo.model.*
+import com.example.nexogo.modules.domicilios.AdminDomicilioViewModel
+import com.example.nexogo.repository.DomicilioRepository
+import kotlinx.coroutines.launch
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AdminDomicilioDetailScreen(
+    domicilioId: String,
+    onNavigateBack: () -> Unit
+) {
+    val viewModel = remember { AdminDomicilioViewModel(DomicilioRepository()) }
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val error by viewModel.error.collectAsStateWithLifecycle()
+    val successMessage by viewModel.successMessage.collectAsStateWithLifecycle()
+    
+    var domicilio by remember { mutableStateOf<Domicilio?>(null) }
+    var showAprobarDialog by remember { mutableStateOf(false) }
+    var showRechazarDialog by remember { mutableStateOf(false) }
+    var motivoRechazo by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    
+    // Cargar domicilio
+    LaunchedEffect(domicilioId) {
+        scope.launch {
+            val repository = DomicilioRepository()
+            val result = repository.getDomicilioById(domicilioId)
+            result.fold(
+                onSuccess = { domicilio = it },
+                onFailure = { }
+            )
+        }
+    }
+    
+    // Mostrar mensajes
+    LaunchedEffect(successMessage) {
+        successMessage?.let {
+            viewModel.clearMessages()
+            onNavigateBack()
+        }
+    }
+    
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Detalle de Solicitud", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        when {
+            isLoading -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding),
+                    contentAlignment = androidx.compose.ui.Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            }
+            domicilio == null -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding),
+                    contentAlignment = androidx.compose.ui.Alignment.Center
+                ) {
+                    Text("Solicitud no encontrada")
+                }
+            }
+            else -> {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .verticalScroll(rememberScrollState())
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // Estado
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "Estado",
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                            EstadoChip(estado = domicilio!!.estado)
+                        }
+                    }
+                    
+                    // Información básica
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text(
+                                text = "Información",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            
+                            InfoRow("Nombre", domicilio!!.nombreUsuario)
+                            InfoRow("Teléfono", domicilio!!.telefono)
+                            InfoRow("Dirección", domicilio!!.direccion)
+                            InfoRow(
+                                "Tipo de solicitud",
+                                if (domicilio!!.tipoSolicitud == TipoSolicitudDomicilio.PRODUCTO) "Domicilio de Productos" else "Domicilio de Servicios"
+                            )
+                            
+                            // Mostrar datos según el tipo
+                            when (domicilio!!.tipoSolicitud) {
+                                TipoSolicitudDomicilio.PRODUCTO -> {
+                                    domicilio!!.datosProducto?.let { datos ->
+                                        Text(
+                                            text = "Productos",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(top = 8.dp)
+                                        )
+                                        datos.listaProductos.forEach { producto ->
+                                            Card(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 4.dp),
+                                                shape = RoundedCornerShape(8.dp),
+                                                colors = CardDefaults.cardColors(
+                                                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                                )
+                                            ) {
+                                                Column(
+                                                    modifier = Modifier.padding(12.dp),
+                                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                                ) {
+                                                    Text(
+                                                        text = producto.nombre,
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = FontWeight.Medium
+                                                    )
+                                                    Text(
+                                                        text = "Cantidad: ${producto.cantidad}",
+                                                        style = MaterialTheme.typography.bodySmall
+                                                    )
+                                                    if (producto.observaciones.isNotBlank()) {
+                                                        Text(
+                                                            text = producto.observaciones,
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        if (datos.observaciones.isNotBlank()) {
+                                            Text(
+                                                text = "Observaciones: ${datos.observaciones}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                modifier = Modifier.padding(top = 8.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                                TipoSolicitudDomicilio.SERVICIO -> {
+                                    domicilio!!.datosServicio?.let { datos ->
+                                        InfoRow(
+                                            "Tipo de servicio",
+                                            DomicilioUtils.getTipoServicioDisplayName(datos.tipoServicio) + 
+                                                (datos.tipoServicioOtro?.let { " - $it" } ?: "")
+                                        )
+                                        InfoRow(
+                                            "Fecha solicitada",
+                                            DomicilioUtils.formatDate(datos.fechaSolicitada.toDate())
+                                        )
+                                        if (datos.descripcion.isNotBlank()) {
+                                            Text(
+                                                text = "Descripción del caso",
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(top = 8.dp)
+                                            )
+                                            Text(
+                                                text = datos.descripcion,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                modifier = Modifier.padding(top = 4.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Historial de eventos
+                    if (domicilio!!.historialEventos.isNotEmpty()) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Text(
+                                    text = "Historial",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                
+                                domicilio!!.historialEventos.forEach { evento ->
+                                    HistorialItem(evento = evento)
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Botones de acción (solo si está pendiente)
+                    if (domicilio!!.estado == DomicilioEstado.PENDIENTE) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Button(
+                                onClick = { showAprobarDialog = true },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary
+                                )
+                            ) {
+                                Text("Aprobar")
+                            }
+                            
+                            OutlinedButton(
+                                onClick = { showRechazarDialog = true },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.error
+                                )
+                            ) {
+                                Text("Rechazar")
+                            }
+                        }
+                    }
+                    
+                    error?.let {
+                        Text(
+                            text = it,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            }
+        }
+    }
+    
+    // Dialog aprobar
+    if (showAprobarDialog) {
+        AlertDialog(
+            onDismissRequest = { showAprobarDialog = false },
+            title = { Text("Aprobar solicitud") },
+            text = { Text("¿Estás seguro de que deseas aprobar esta solicitud?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.aprobarDomicilio(domicilioId)
+                        showAprobarDialog = false
+                    }
+                ) {
+                    Text("Aprobar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAprobarDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+    
+    // Dialog rechazar
+    if (showRechazarDialog) {
+        AlertDialog(
+            onDismissRequest = { showRechazarDialog = false },
+            title = { Text("Rechazar solicitud") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Ingresa el motivo del rechazo:")
+                    OutlinedTextField(
+                        value = motivoRechazo,
+                        onValueChange = { motivoRechazo = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Motivo") },
+                        minLines = 3,
+                        maxLines = 5
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (motivoRechazo.isNotBlank()) {
+                            viewModel.rechazarDomicilio(domicilioId, motivoRechazo)
+                            showRechazarDialog = false
+                            motivoRechazo = ""
+                        }
+                    },
+                    enabled = motivoRechazo.isNotBlank()
+                ) {
+                    Text("Rechazar", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRechazarDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+}
+
