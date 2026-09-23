@@ -47,18 +47,11 @@ object FirebaseAutoFixer {
     private suspend fun fixAuthIssues(): Boolean = withContext(Dispatchers.IO) {
         try {
             val auth = FirebaseAuth.getInstance()
-            val adminEmail = "admin@nexogo.com"
-
-            // Elimina usuarios duplicados de prueba
-            auth.fetchSignInMethodsForEmail(adminEmail).await()?.let {
-                if (it.signInMethods?.size ?: 0 > 1) {
-                    Log.w(TAG, "⚠️ Duplicado detectado en Auth. Eliminando duplicados...")
-                    auth.currentUser?.delete()?.await()
-                    auth.createUserWithEmailAndPassword(adminEmail, "123456").await()
-                    Log.d(TAG, "✅ Usuario administrador restaurado correctamente.")
-                } else {
-                    Log.d(TAG, "✅ Auth sin duplicados.")
-                }
+            // S0 Secure: never create or restore hardcoded admin credentials
+            if (auth.currentUser != null) {
+                Log.d(TAG, "✅ Auth: sesión activa ${auth.currentUser?.uid}")
+            } else {
+                Log.d(TAG, "✅ Auth: sin sesión (esperado fuera de login)")
             }
             true
         } catch (e: Exception) {

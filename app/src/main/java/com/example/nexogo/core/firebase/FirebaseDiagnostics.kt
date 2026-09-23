@@ -65,11 +65,10 @@ object FirebaseDiagnostics {
         try {
             val auth = FirebaseAuth.getInstance()
             if (auth.currentUser == null) {
-                auth.signInWithEmailAndPassword("admin@nexogo.com", "123456").await()
-                Log.d(TAG, "✅ Autenticación exitosa con admin@nexogo.com")
-            } else {
-                Log.d(TAG, "✅ Usuario autenticado: ${auth.currentUser?.email}")
+                Log.w(TAG, "⚠️ Sin usuario autenticado — omitiendo login de diagnóstico (S0 Secure)")
+                return@withContext false
             }
+            Log.d(TAG, "✅ Usuario autenticado: ${auth.currentUser?.email}")
             true
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error de autenticación: ${e.message}", e)

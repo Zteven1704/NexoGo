@@ -50,7 +50,7 @@ class MockDataGenerator(private val repository: FirebaseRepository) {
         val testUsers = listOf(
             mapOf(
                 "uid" to "admin_001",
-                "email" to "admin@nexogo.com",
+                "email" to "admin.demo@example.com",
                 "name" to "Administrador NexoGo",
                 "phone" to "+57 300 123 4567",
                 "whatsapp" to "+57 300 123 4567",

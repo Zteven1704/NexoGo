@@ -62,14 +62,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        
-        <!-- Firebase Test Activity -->
+
+        <!-- Firebase Test Activity — no launcher; debug only -->
         <activity
             android:name=".FirebaseFullTestActivity"
-            android:exported="true"
+            android:exported="false"
             android:label="Firebase Test"
-            android:theme="@style/Theme.NexoGo" />
-        
+            android:theme="@style/Theme.NexoGo" /> 
         <!-- Firebase Messaging Service -->
         <service
             android:name=".notifications.NexoGoMessagingService"

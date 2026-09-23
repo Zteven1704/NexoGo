@@ -29,7 +29,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun RegisterScreen(
     onNavigateToLogin: () -> Unit,
-    onNavigateToHome: () -> Unit
+    onNavigateToHome: () -> Unit,
+    onNavigateToOnboarding: () -> Unit = onNavigateToHome
 ) {
     val context = LocalContext.current
     val authRepository = remember { 
@@ -81,18 +82,14 @@ fun RegisterScreen(
                 authRepository.registerUser(email, password, name, selectedRole, phone, whatsapp)
                     .onSuccess { user ->
                         println("DEBUG: RegisterScreen - Registro exitoso: ${user.name}")
-                        successMessage = "Tu cuenta ha sido registrada. Debes esperar la aprobación del administrador antes de iniciar sesión."
-                        // Limpiar campos
-                        name = ""
-                        email = ""
-                        password = ""
-                        confirmPassword = ""
-                        phone = ""
-                        whatsapp = ""
-                        selectedRole = UserRole.USER
-                        // Redirigir al login inmediatamente
-                        println("DEBUG: RegisterScreen - Navegando a login...")
-                        onNavigateToLogin()
+                        // Acceso Platform: Auth OK → onboarding/company (membership ACTIVE), no isApproved
+                        val dataStore = com.example.nexogo.data.AppDataStore(context)
+                        dataStore.saveUser(user)
+                        val authViewModel =
+                            com.example.nexogo.viewmodel.PersistentAuthViewModel.getInstance(context)
+                        authViewModel.setCurrentUser(user)
+                        successMessage = "Cuenta creada. Configura tu empresa."
+                        onNavigateToOnboarding()
                     }
                     .onFailure { exception ->
                         println("DEBUG: RegisterScreen - Error en registro: ${exception.message}")

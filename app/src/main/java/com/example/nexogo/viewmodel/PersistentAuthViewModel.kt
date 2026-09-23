@@ -3,18 +3,25 @@ package com.example.nexogo.viewmodel
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.nexogo.data.AppDataStore
 import com.example.nexogo.core.models.User
 import com.example.nexogo.core.models.UserRole
+import com.example.nexogo.data.AppDataStore
+import com.example.nexogo.platform.audit.AuditLogger
+import com.example.nexogo.platform.company.session.CompanySessionManager
+import com.example.nexogo.platform.tenant.context.TenantContext
+import com.example.nexogo.platform.usage.UsageAnalytics
 import com.example.nexogo.repository.FirebaseAuthRepository
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class PersistentAuthViewModel(private val context: Context) : ViewModel() {
     
@@ -43,6 +50,7 @@ class PersistentAuthViewModel(private val context: Context) : ViewModel() {
     private val firebaseAuth = FirebaseAuth.getInstance()
     private val firestore = FirebaseFirestore.getInstance()
     private val firebaseRepository = FirebaseAuthRepository(firebaseAuth, firestore)
+    private val companySessionManager = CompanySessionManager.getInstance(context)
     
     private val _uiState = MutableStateFlow(AuthUiState())
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
@@ -82,6 +90,7 @@ class PersistentAuthViewModel(private val context: Context) : ViewModel() {
                         
                         // Actualizar caché local
                         dataStore.saveUser(firebaseUser)
+                        bindCompanySession(firebaseUser)
                         println("DEBUG: Usuario cargado exitosamente desde Firebase")
                         return@launch
                     } else {
@@ -100,22 +109,11 @@ class PersistentAuthViewModel(private val context: Context) : ViewModel() {
                         isAuthenticated = true,
                         currentUser = user
                     )
+                    bindCompanySession(user)
                     println("DEBUG: Usuario cargado desde DataStore exitosamente")
                 } else {
                     println("DEBUG: No hay usuario en DataStore")
-                    // Solo crear admin por defecto si es la primera vez que se ejecuta la app
-                    val hasUserData = try {
-                        dataStore.hasUserData().first()
-                    } catch (e: Exception) {
-                        false
-                    }
-                    
-                    if (!hasUserData) {
-                        println("DEBUG: Primera ejecución de la app, creando admin por defecto")
-                        createDefaultAdmin()
-                    } else {
-                        println("DEBUG: Hay datos de usuario en DataStore pero no se pudo cargar")
-                    }
+                    // S0 Secure: do not auto-create admin; leave unauthenticated
                 }
             } catch (e: Exception) {
                 println("DEBUG: Error cargando usuario: ${e.message}")
@@ -132,42 +130,12 @@ class PersistentAuthViewModel(private val context: Context) : ViewModel() {
                         isAuthenticated = true,
                         currentUser = existingUser
                     )
+                    bindCompanySession(existingUser)
                     println("DEBUG: Usuario recuperado después del error: ${existingUser.name}")
                 } else {
-                    val hasUserData = try {
-                        dataStore.hasUserData().first()
-                    } catch (e: Exception) {
-                        false
-                    }
-                    
-                    if (!hasUserData) {
-                        println("DEBUG: Primera ejecución después de error, creando admin por defecto")
-                        createDefaultAdmin()
-                    }
+                    println("DEBUG: Sin sesión recuperable — usuario no autenticado")
                 }
             }
-        }
-    }
-    
-    private fun createDefaultAdmin() {
-        val adminUser = User(
-            id = "admin_uid_123",
-            email = "admin@nexogo.com",
-            name = "Dr. María González",
-            phone = "1234567890",
-            whatsapp = "1234567890",
-            profileImageUrl = "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=150&h=150&fit=crop&crop=face",
-            role = UserRole.ADMIN,
-            isApproved = true
-        )
-        _currentUser.value = adminUser
-        _uiState.value = _uiState.value.copy(
-            isAuthenticated = true,
-            currentUser = adminUser
-        )
-        // Save admin user to DataStore
-        viewModelScope.launch {
-            dataStore.saveUser(adminUser)
         }
     }
 
@@ -211,44 +179,22 @@ class PersistentAuthViewModel(private val context: Context) : ViewModel() {
                     return@launch
                 }
 
-                // Simulate successful registration
+                // Local/sim register: Auth session only. Tenant access = membership ACTIVE + company session.
                 val user = User(
                     id = "user_${System.currentTimeMillis()}",
                     email = email,
                     name = name,
                     profileImageUrl = getSampleProfileImage(role),
-                    role = role,
-                    isApproved = role == UserRole.USER
+                    role = role
                 )
-
-                if (role == UserRole.USER) {
-                    // Users are approved immediately
-                    _currentUser.value = user
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        currentUser = user,
-                        isAuthenticated = true,
-                        message = "¡Registro exitoso!"
-                    )
-                    // Save user to DataStore
-                    dataStore.saveUser(user)
-                } else {
-                    // Professionals need approval
-                    val pendingUser = user.copy(role = UserRole.VET)
-                    val currentPending = _pendingUsers.value.toMutableList()
-                    currentPending.add(pendingUser)
-                    _pendingUsers.value = currentPending
-                    
-                // Save pending users to DataStore
-                val gson = com.google.gson.Gson()
-                val json = gson.toJson(currentPending)
-                dataStore.savePendingUsers(json)
-                    
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        message = "¡Registro exitoso! Tu cuenta está pendiente de aprobación del administrador."
-                    )
-                }
+                _currentUser.value = user
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    currentUser = user,
+                    isAuthenticated = true,
+                    message = "¡Registro exitoso!"
+                )
+                dataStore.saveUser(user)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(isLoading = false, error = e.message ?: "Error desconocido")
             }
@@ -287,26 +233,17 @@ class PersistentAuthViewModel(private val context: Context) : ViewModel() {
                     return@launch
                 }
 
-                // Check if user exists in DataStore
+                // Local/sim login: no isApproved gate. Platform hub usa company session + membership ACTIVE.
                 val savedUser = dataStore.getUser().first()
                 if (savedUser != null && savedUser.email == email) {
-                    // User exists, check if approved
-                    if (savedUser.isApproved) {
-                        _currentUser.value = savedUser
-                        _uiState.value = _uiState.value.copy(
-                            isLoading = false,
-                            currentUser = savedUser,
-                            isAuthenticated = true,
-                            message = "¡Bienvenido ${savedUser.name}!"
-                        )
-                    } else {
-                        _uiState.value = _uiState.value.copy(
-                            isLoading = false,
-                            error = "Tu cuenta está pendiente de aprobación del administrador"
-                        )
-                    }
+                    _currentUser.value = savedUser
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        currentUser = savedUser,
+                        isAuthenticated = true,
+                        message = "¡Bienvenido ${savedUser.name}!"
+                    )
                 } else {
-                    // User doesn't exist
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         error = "Usuario no encontrado. Por favor, regístrate primero."
@@ -320,8 +257,20 @@ class PersistentAuthViewModel(private val context: Context) : ViewModel() {
 
     fun logout() {
         viewModelScope.launch {
+            val userSnapshot = _currentUser.value
+            val companyIdSnapshot = companySessionManager.activeCompanyId
+                ?: TenantContext.companyId
             try {
                 println("DEBUG: Realizando logout...")
+
+                if (userSnapshot != null) {
+                    AuditLogger.logout(
+                        userId = userSnapshot.id,
+                        companyId = companyIdSnapshot,
+                        userDisplayName = userSnapshot.name,
+                        userEmail = userSnapshot.email
+                    )
+                }
                 
                 // Logout de Firebase
                 val result = firebaseRepository.logout()
@@ -331,6 +280,7 @@ class PersistentAuthViewModel(private val context: Context) : ViewModel() {
                     println("DEBUG: Error en logout de Firebase: ${result.exceptionOrNull()?.message}")
                 }
                 
+                companySessionManager.clearSession()
                 _currentUser.value = null
                 _uiState.value = AuthUiState()
                 
@@ -341,6 +291,7 @@ class PersistentAuthViewModel(private val context: Context) : ViewModel() {
             } catch (e: Exception) {
                 println("DEBUG: Error durante logout: ${e.message}")
                 // Aún así limpiar el estado local
+                companySessionManager.clearSession()
                 _currentUser.value = null
                 _uiState.value = AuthUiState()
                 dataStore.clearUser()
@@ -475,6 +426,45 @@ class PersistentAuthViewModel(private val context: Context) : ViewModel() {
         )
         println("DEBUG: Usuario establecido en ViewModel: ${user.name}")
         println("DEBUG: Foto de perfil establecida: ${user.profileImageUrl}")
+        viewModelScope.launch {
+            bindCompanySession(user)
+        }
+    }
+
+    /**
+     * Binds SaaS company session (S1: hub requires active company; failure is surfaced in Home).
+     */
+    private suspend fun bindCompanySession(user: User) {
+        try {
+            companySessionManager.ensureSessionForUser(
+                userId = user.id,
+                displayName = user.name.ifBlank { user.email }
+            )
+            AuditLogger.login(
+                userId = user.id,
+                companyId = companySessionManager.activeCompanyId ?: TenantContext.companyId,
+                userDisplayName = user.name,
+                userEmail = user.email
+            )
+            UsageAnalytics.login(
+                userId = user.id,
+                companyId = companySessionManager.activeCompanyId ?: TenantContext.companyId
+            )
+        } catch (e: Exception) {
+            println("DEBUG: Company session bind skipped: ${e.message}")
+            AuditLogger.login(
+                userId = user.id,
+                companyId = TenantContext.companyId,
+                userDisplayName = user.name,
+                userEmail = user.email,
+                metadata = mapOf("companyBindError" to (e.message ?: "unknown"))
+            )
+            UsageAnalytics.login(
+                userId = user.id,
+                companyId = TenantContext.companyId,
+                metadata = mapOf("companyBindError" to (e.message ?: "unknown"))
+            )
+        }
     }
     
     fun refreshUserFromDataStore() {
@@ -500,6 +490,7 @@ class PersistentAuthViewModel(private val context: Context) : ViewModel() {
                     } else {
                         println("DEBUG: Usuario ya está actualizado, no hay cambios")
                     }
+                    bindCompanySession(user)
                 } else {
                     println("DEBUG: No hay usuario en DataStore al refrescar")
                 }
@@ -527,18 +518,6 @@ class PersistentAuthViewModel(private val context: Context) : ViewModel() {
                 println("DEBUG: === FIN PRUEBA ===")
             } catch (e: Exception) {
                 println("DEBUG: Error en prueba de persistencia: ${e.message}")
-            }
-        }
-    }
-    
-    // Método para crear admin por defecto manualmente
-    fun createDefaultAdminManually() {
-        viewModelScope.launch {
-            try {
-                println("DEBUG: Creando admin por defecto manualmente...")
-                createDefaultAdmin()
-            } catch (e: Exception) {
-                println("DEBUG: Error creando admin por defecto: ${e.message}")
             }
         }
     }

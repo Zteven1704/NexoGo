@@ -3,14 +3,18 @@ package com.example.nexogo.core.models
 import com.google.firebase.Timestamp
 
 /**
- * Modelo de Usuario para NexoGo
+ * Modelo de Usuario para NexoGo.
+ *
+ * [isApproved] es campo legacy de aprobación global; **no** decide acceso Platform.
+ * Autorización viva: FirebaseAuth + membership ACTIVE + company session.
  */
 data class User(
     val id: String = "",
     val name: String = "",
     val email: String = "",
     val role: UserRole = UserRole.USER,
-    val isApproved: Boolean = false,
+    /** Legacy only — do not use for navigation or login gates. */
+    val isApproved: Boolean = true,
     val fcmToken: String? = null,
     val phone: String = "",
     val whatsapp: String = "",

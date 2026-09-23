@@ -36,7 +36,7 @@ class FirebaseFullTestActivity : ComponentActivity() {
     companion object {
         private const val TAG = "FirebaseFullTest"
         private const val TEST_EMAIL = "test@nexogo.com"
-        private const val TEST_PASSWORD = "123456"
+        private const val TEST_PASSWORD = "unused-s0-secure"
     }
     
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -471,7 +471,7 @@ private fun testFirebaseAuth(auth: FirebaseAuth) {
         Log.d("FirebaseFullTest", "🔐 Iniciando test de Firebase Authentication...")
         
         val TEST_EMAIL = "test@nexogo.com"
-        val TEST_PASSWORD = "123456"
+        val TEST_PASSWORD = "unused-s0-secure"
         
         // Intentar iniciar sesión con el usuario de prueba
         val signInTask = auth.signInWithEmailAndPassword(TEST_EMAIL, TEST_PASSWORD)

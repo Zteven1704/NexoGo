@@ -11,8 +11,8 @@ import com.example.nexogo.model.ClinicalRecord
 import com.example.nexogo.model.Product
 import com.example.nexogo.model.Message
 import com.example.nexogo.model.Chat
-import com.example.nexogo.viewmodel.Settings
-import com.example.nexogo.viewmodel.ProductCategory
+import com.example.nexogo.model.AppSettings
+import com.example.nexogo.model.LocalProductCategory
 import com.example.nexogo.model.Sale
 import com.example.nexogo.model.VeterinaryService
 import com.example.nexogo.model.Invoice
@@ -89,7 +89,7 @@ class AppDataStore(private val context: Context) {
         val profileImageUrl = preferences[USER_PROFILE_IMAGE_URL] ?: ""
         val roleString = preferences[USER_ROLE] ?: "USER"
         val role = try { UserRole.valueOf(roleString) } catch (e: Exception) { UserRole.USER }
-        val isApproved = preferences[USER_IS_APPROVED] ?: true
+        val isApproved = preferences[USER_IS_APPROVED] ?: true // legacy cache; not an auth gate
         val isProfessional = preferences[USER_IS_PROFESSIONAL] ?: false
         val specialization = preferences[USER_SPECIALIZATION] ?: ""
         val licenseNumber = preferences[USER_LICENSE_NUMBER] ?: ""
@@ -333,7 +333,7 @@ class AppDataStore(private val context: Context) {
     }
 
     // Settings functions
-    suspend fun saveSettings(settings: Settings) {
+    suspend fun saveSettings(settings: AppSettings) {
         try {
             val gson = com.google.gson.Gson()
             val json = gson.toJson(settings)
@@ -345,14 +345,14 @@ class AppDataStore(private val context: Context) {
         }
     }
 
-    suspend fun loadSettings(): Settings? {
+    suspend fun loadSettings(): AppSettings? {
         return try {
             val json = context.dataStore.data.map { preferences ->
                 preferences[stringPreferencesKey("settings")]
             }.first()
             if (json != null) {
                 val gson = com.google.gson.Gson()
-                gson.fromJson<Settings>(json, Settings::class.java)
+                gson.fromJson(json, AppSettings::class.java)
             } else {
                 null
             }
@@ -362,7 +362,7 @@ class AppDataStore(private val context: Context) {
     }
 
     // Product Categories functions
-    suspend fun saveProductCategories(categories: List<ProductCategory>) {
+    suspend fun saveProductCategories(categories: List<LocalProductCategory>) {
         try {
             val gson = com.google.gson.Gson()
             val json = gson.toJson(categories)
@@ -374,15 +374,15 @@ class AppDataStore(private val context: Context) {
         }
     }
 
-    suspend fun loadProductCategories(): List<ProductCategory> {
+    suspend fun loadProductCategories(): List<LocalProductCategory> {
         return try {
             val json = context.dataStore.data.map { preferences ->
                 preferences[stringPreferencesKey("product_categories")]
             }.first()
             if (json != null) {
                 val gson = com.google.gson.Gson()
-                val type = object : com.google.gson.reflect.TypeToken<List<ProductCategory>>() {}.type
-                gson.fromJson<List<ProductCategory>>(json, type) ?: emptyList()
+                val type = object : com.google.gson.reflect.TypeToken<List<LocalProductCategory>>() {}.type
+                gson.fromJson<List<LocalProductCategory>>(json, type) ?: emptyList()
             } else {
                 emptyList()
             }

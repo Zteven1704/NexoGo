@@ -11,96 +11,7 @@ class FirebaseAuthRepository(
     private val auth: FirebaseAuth,
     private val firestore: FirebaseFirestore
 ) {
-    
-    init {
-        // Crear usuario administrador automáticamente si no existe
-        createAdminUserIfNeeded()
-    }
-    
-    private fun createAdminUserIfNeeded() {
-        // Verificar si el usuario admin existe en Firestore
-        firestore.collection("usuarios")
-            .whereEqualTo("correo", "admin@nexogo.com")
-            .get()
-            .addOnCompleteListener { task ->
-                if (task.isSuccessful) {
-                    val documents = task.result?.documents
-                    if (documents.isNullOrEmpty()) {
-                        println("DEBUG: FirebaseAuthRepository - Usuario admin no encontrado en Firestore, creando...")
-                        createAdminUser()
-                    } else {
-                        println("DEBUG: FirebaseAuthRepository - Usuario admin ya existe en Firestore")
-                    }
-                } else {
-                    println("DEBUG: FirebaseAuthRepository - Error verificando usuario admin en Firestore: ${task.exception?.message}")
-                    // Si hay error, intentar crear de todas formas
-                    createAdminUser()
-                }
-            }
-    }
-    
-    private fun createAdminUser() {
-        println("DEBUG: FirebaseAuthRepository - Creando usuario administrador...")
-        
-        // Primero verificar si ya existe en Auth
-        auth.fetchSignInMethodsForEmail("admin@nexogo.com")
-            .addOnCompleteListener { authTask ->
-                if (authTask.isSuccessful) {
-                    val signInMethods = authTask.result?.signInMethods
-                    if (signInMethods.isNullOrEmpty()) {
-                        // No existe en Auth, crearlo
-                        auth.createUserWithEmailAndPassword("admin@nexogo.com", "123456")
-                            .addOnCompleteListener { createTask ->
-                                if (createTask.isSuccessful) {
-                                    println("DEBUG: FirebaseAuthRepository - Usuario administrador creado en Auth")
-                                    createAdminUserDocument(createTask.result?.user?.uid)
-                                } else {
-                                    println("DEBUG: FirebaseAuthRepository - Error creando usuario admin en Auth: ${createTask.exception?.message}")
-                                }
-                            }
-                    } else {
-                        // Ya existe en Auth, solo crear/actualizar documento en Firestore
-                        println("DEBUG: FirebaseAuthRepository - Usuario admin ya existe en Auth, creando documento en Firestore")
-                        auth.signInWithEmailAndPassword("admin@nexogo.com", "123456")
-                            .addOnCompleteListener { signInTask ->
-                                if (signInTask.isSuccessful) {
-                                    createAdminUserDocument(signInTask.result?.user?.uid)
-                                } else {
-                                    println("DEBUG: FirebaseAuthRepository - Error iniciando sesión como admin: ${signInTask.exception?.message}")
-                                }
-                            }
-                    }
-                } else {
-                    println("DEBUG: FirebaseAuthRepository - Error verificando usuario admin en Auth: ${authTask.exception?.message}")
-                }
-            }
-    }
-    
-    private fun createAdminUserDocument(uid: String?) {
-        if (uid != null) {
-            val adminData = mapOf(
-                "uid" to uid,
-                "nombre" to "Dr. María González",
-                "correo" to "admin@nexogo.com",
-                "telefono" to "1234567890",
-                "whatsapp" to "1234567890",
-                "rol" to "ADMIN",
-                "estado" to "aprobado",
-                "isApproved" to true,
-                "fechaRegistro" to com.google.firebase.Timestamp.now()
-            )
-            
-            firestore.collection("usuarios").document(uid)
-                .set(adminData)
-                .addOnSuccessListener {
-                    println("DEBUG: FirebaseAuthRepository - Documento de admin creado/actualizado en Firestore")
-                }
-                .addOnFailureListener { e ->
-                    println("DEBUG: FirebaseAuthRepository - Error creando documento de admin: ${e.message}")
-                }
-        }
-    }
-    
+
     suspend fun registerUser(
         email: String,
         password: String,
@@ -130,12 +41,14 @@ class FirebaseAuthRepository(
             
             // Crear documento de usuario en Firestore
             println("DEBUG: FirebaseAuthRepository - Creando objeto User...")
+            // Platform auth: FirebaseAuth + membership ACTIVE + company session.
+            // isApproved se persiste sólo por compatibilidad histórica (no gatea acceso).
             val user = User(
                 id = firebaseUser.uid,
                 name = name,
                 email = email,
                 role = role,
-                isApproved = false, // Todos los usuarios requieren aprobación
+                isApproved = true,
                 fcmToken = fcmToken,
                 phone = phone,
                 whatsapp = whatsapp,
@@ -153,17 +66,12 @@ class FirebaseAuthRepository(
                     "telefono" to phone,
                     "whatsapp" to whatsapp,
                     "rol" to role.name,
-                    "estado" to "pendiente",
+                    "estado" to "activo",
                     "token" to fcmToken,
                     "fechaRegistro" to com.google.firebase.Timestamp.now(),
-                    "isApproved" to false
+                    "isApproved" to true
                 )).await()
             println("DEBUG: FirebaseAuthRepository - Usuario guardado en Firestore")
-            
-            // Enviar notificación al administrador
-            println("DEBUG: FirebaseAuthRepository - Enviando notificación al admin...")
-            sendAdminNotification(user)
-            println("DEBUG: FirebaseAuthRepository - Notificación enviada")
             
             println("DEBUG: FirebaseAuthRepository - Registro completado exitosamente")
             Result.success(user)
@@ -203,13 +111,10 @@ class FirebaseAuthRepository(
                     emailDoc.reference.update("uid", firebaseUser.uid)
                     // Usar el documento encontrado
                     val data = emailDoc.data ?: throw Exception("Datos de usuario no disponibles")
-                    val isApproved = data["isApproved"] as? Boolean ?: false
                     val rol = data["rol"] as? String ?: "USER"
-                    
-                    if (!isApproved) {
-                        throw Exception("Tu cuenta está pendiente de aprobación por el administrador.")
-                    }
-                    
+                    // isApproved: solo lectura histórica; no bloquea login Platform
+                    val isApproved = data["isApproved"] as? Boolean ?: true
+
                     val user = User(
                         id = firebaseUser.uid,
                         name = data["nombre"] as? String ?: "Usuario",
@@ -229,15 +134,9 @@ class FirebaseAuthRepository(
             }
             
             val data = doc.data ?: throw Exception("Datos de usuario no disponibles")
-            val isApproved = data["isApproved"] as? Boolean ?: false
             val rol = data["rol"] as? String ?: "USER"
-            
-            // Verificar que el usuario esté aprobado
-            if (!isApproved) {
-                throw Exception("Tu cuenta está pendiente de aprobación por el administrador.")
-            }
-            
-            // Crear objeto User
+            val isApproved = data["isApproved"] as? Boolean ?: true
+
             val user = User(
                 id = firebaseUser.uid,
                 name = data["nombre"] as? String ?: "Usuario",
@@ -407,74 +306,25 @@ class FirebaseAuthRepository(
             )
             
             println("DEBUG: FirebaseAuthRepository - Usuario creado con rol: ${user.role}")
-            
-            // Si es admin@nexogo.com pero no tiene rol ADMIN, corregirlo
-            if (user.email == "admin@nexogo.com" && user.role != UserRole.ADMIN) {
-                println("DEBUG: FirebaseAuthRepository - Admin detectado con rol incorrecto, corrigiendo...")
+
+            // Trust Firestore role field; do not grant ADMIN by email.
+            val originalRoleFromFirestore = data["rol"] as? String ?: data["role"] as? String ?: "USER"
+            if (user.role == UserRole.ADMIN && originalRoleFromFirestore != "ADMIN") {
+                println("DEBUG: FirebaseAuthRepository - Rol ADMIN inconsistente con Firestore, corrigiendo a $originalRoleFromFirestore")
                 try {
-                    val updates = hashMapOf<String, Any>(
-                        "rol" to "ADMIN",
-                        "role" to "ADMIN",
-                        "isApproved" to true,
-                        "isProfessional" to false,
-                        "fechaActualizacion" to com.google.firebase.Timestamp.now()
-                    )
-                    
-                    firestore.collection("usuarios").document(userId).update(updates).await()
-                    println("DEBUG: FirebaseAuthRepository - Rol de admin corregido exitosamente")
-                    
-                    // Crear usuario con rol corregido
-                    val correctedUser = user.copy(role = UserRole.ADMIN)
-                    return Result.success(correctedUser)
-                } catch (e: Exception) {
-                    println("DEBUG: FirebaseAuthRepository - Error corrigiendo rol de admin: ${e.message}")
-                    // Continuar con el usuario original si falla la corrección
-                }
-            }
-            
-            // Para usuarios normales, asegurar que NO sean ADMIN a menos que sea admin@nexogo.com
-            if (user.email != "admin@nexogo.com" && user.role == UserRole.ADMIN) {
-                println("DEBUG: FirebaseAuthRepository - Usuario normal detectado con rol ADMIN incorrecto, corrigiendo a USER...")
-                try {
-                    val updates = hashMapOf<String, Any>(
-                        "rol" to "USER",
-                        "role" to "USER",
-                        "fechaActualizacion" to com.google.firebase.Timestamp.now()
-                    )
-                    
-                    firestore.collection("usuarios").document(userId).update(updates).await()
-                    println("DEBUG: FirebaseAuthRepository - Rol de usuario normal corregido a USER")
-                    
-                    // Crear usuario con rol corregido
-                    val correctedUser = user.copy(role = UserRole.USER)
-                    return Result.success(correctedUser)
-                } catch (e: Exception) {
-                    println("DEBUG: FirebaseAuthRepository - Error corrigiendo rol de usuario normal: ${e.message}")
-                    // Continuar con el usuario original si falla la corrección
-                }
-            }
-            
-            // Para usuarios VET y VET_ASSISTANT, asegurar que NO sean ADMIN
-            val originalRoleFromFirestore = data["rol"] as? String ?: "USER"
-            if (user.email != "admin@nexogo.com" && user.role == UserRole.ADMIN && (originalRoleFromFirestore == "VET" || originalRoleFromFirestore == "VET_ASSISTANT")) {
-                println("DEBUG: FirebaseAuthRepository - Usuario profesional detectado con rol ADMIN incorrecto, corrigiendo...")
-                try {
-                    val correctedRole = when (originalRoleFromFirestore) {
-                        "VET" -> UserRole.VET
-                        "VET_ASSISTANT" -> UserRole.VET_ASSISTANT
-                        else -> UserRole.USER
+                    val correctedRole = try {
+                        UserRole.valueOf(originalRoleFromFirestore)
+                    } catch (_: Exception) {
+                        UserRole.USER
                     }
-                    
+
                     val updates = hashMapOf<String, Any>(
                         "rol" to correctedRole.name,
                         "role" to correctedRole.name,
                         "fechaActualizacion" to com.google.firebase.Timestamp.now()
                     )
-                    
+
                     firestore.collection("usuarios").document(userId).update(updates).await()
-                    println("DEBUG: FirebaseAuthRepository - Rol de usuario profesional corregido a ${correctedRole.name}")
-                    
-                    // Crear usuario con rol corregido
                     val correctedUser = user.copy(role = correctedRole)
                     return Result.success(correctedUser)
                 } catch (e: Exception) {

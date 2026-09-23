@@ -173,7 +173,7 @@ class FirebaseFirestoreManager {
                 User(
                     id = "admin_test",
                     name = "Dr. María González",
-                    email = "admin@nexogo.com",
+                    email = "admin.demo@example.com",
                     role = com.example.nexogo.core.models.UserRole.ADMIN,
                     phone = "+52 55 1234 5678",
                     address = "Av. Reforma 123, CDMX",

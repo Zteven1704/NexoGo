@@ -310,20 +310,7 @@ fun ProfileScreen(
                     }
                 )
                 
-                if (userData.isProfessional && !userData.isApproved) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    AssistChip(
-                        onClick = { },
-                        label = { Text("Pendiente de aprobación") },
-                        leadingIcon = {
-                            Icon(Icons.Default.HourglassEmpty, contentDescription = null)
-                        },
-                        colors = AssistChipDefaults.assistChipColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer,
-                            labelColor = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                    )
-                }
+                // isApproved legacy: no chip de “pendiente de aprobación” — acceso = membership ACTIVE
             }
             
             Spacer(modifier = Modifier.height(32.dp))
@@ -532,24 +519,6 @@ fun ProfileScreen(
                                 else 
                                     MaterialTheme.colorScheme.error
                             )
-                        }
-                        
-                        if (userData.isProfessional) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text("Aprobación:")
-                                Text(
-                                    text = if (userData.isApproved) "Aprobado" else "Pendiente",
-                                    color = if (userData.isApproved) 
-                                        MaterialTheme.colorScheme.primary 
-                                    else 
-                                        MaterialTheme.colorScheme.error
-                                )
-                            }
                         }
                     }
                 }

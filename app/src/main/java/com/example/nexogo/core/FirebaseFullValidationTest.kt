@@ -59,7 +59,7 @@ class FirebaseFullValidationTest(private val context: Context) {
         return try {
             // Test 1: Crear usuario de prueba
             val testEmail = "test@nexogo.com"
-            val testPassword = "123456"
+            val testPassword = "unused-s0-secure"
             
             // Intentar crear usuario (puede fallar si ya existe)
             try {

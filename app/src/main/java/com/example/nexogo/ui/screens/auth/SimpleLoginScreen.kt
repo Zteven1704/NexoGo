@@ -21,8 +21,8 @@ import com.example.nexogo.repository.FirebaseAuthRepository
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.tasks.await
 
 /**
  * Pantalla de login simplificada sin dependencias complejas
@@ -37,64 +37,9 @@ fun SimpleLoginScreen(
     val authRepository = remember { 
         FirebaseAuthRepository(FirebaseAuth.getInstance(), FirebaseFirestore.getInstance()) 
     }
-    
-    // Crear usuario administrador si no existe
-    LaunchedEffect(Unit) {
-        try {
-            println("DEBUG: SimpleLoginScreen - Iniciando verificación de usuario administrador...")
-            
-            // Verificar si el usuario admin existe en Firestore
-            val existingQuery = FirebaseFirestore.getInstance()
-                .collection("usuarios")
-                .whereEqualTo("correo", "admin@nexogo.com")
-                .get()
-                .await()
-            
-            if (existingQuery.documents.isEmpty()) {
-                println("DEBUG: SimpleLoginScreen - Usuario admin no existe, creando...")
-                
-                // Crear usuario en Firebase Auth
-                val authResult = FirebaseAuth.getInstance()
-                    .createUserWithEmailAndPassword("admin@nexogo.com", "123456")
-                    .await()
-                
-                val uid = authResult.user?.uid
-                println("DEBUG: SimpleLoginScreen - Usuario admin creado en Auth con UID: $uid")
-                
-                if (uid != null) {
-                    // Crear documento en Firestore
-                    val adminData = mapOf(
-                        "uid" to uid,
-                        "nombre" to "Dr. María González",
-                        "correo" to "admin@nexogo.com",
-                        "telefono" to "1234567890",
-                        "whatsapp" to "1234567890",
-                        "rol" to "ADMIN",
-                        "estado" to "aprobado",
-                        "isApproved" to true,
-                        "fechaRegistro" to com.google.firebase.Timestamp.now()
-                    )
-                    
-                    FirebaseFirestore.getInstance()
-                        .collection("usuarios")
-                        .document(uid)
-                        .set(adminData)
-                        .await()
-                    
-                    println("DEBUG: SimpleLoginScreen - Usuario admin creado en Firestore con UID: $uid")
-                }
-            } else {
-                println("DEBUG: SimpleLoginScreen - Usuario admin ya existe en Firestore")
-                val existingDoc = existingQuery.documents.first()
-                val existingUid = existingDoc.getString("uid")
-                println("DEBUG: SimpleLoginScreen - UID existente: $existingUid")
-            }
-        } catch (e: Exception) {
-            println("DEBUG: SimpleLoginScreen - Error: ${e.message}")
-            e.printStackTrace()
-        }
-    }
-    
+
+    // S0 Secure: no auto-create admin account
+
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
@@ -256,19 +201,15 @@ fun SimpleLoginScreen(
                                    message = "¡Bienvenido ${updatedUser.name}!"
                                } else {
                                    // Si no hay perfil guardado, crear uno básico
+                                   // Auth OK → Home (company session gatea hub). isApproved no decide acceso.
                                    val basicUser = com.example.nexogo.core.models.User(
                                        id = user.uid,
                                        email = user.email ?: email,
                                        name = user.displayName ?: "Usuario",
                                        phone = "",
                                        whatsapp = "",
-                                       profileImageUrl = if (email == "admin@nexogo.com") {
-                                           "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=150&h=150&fit=crop&crop=face"
-                                       } else {
-                                           "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face"
-                                       },
-                                       role = if (email == "admin@nexogo.com") com.example.nexogo.core.models.UserRole.ADMIN else com.example.nexogo.core.models.UserRole.USER,
-                                       isApproved = true,
+                                       profileImageUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face",
+                                       role = com.example.nexogo.core.models.UserRole.USER,
                                        fcmToken = null
                                    )
                                    

@@ -1,20 +1,27 @@
 package com.example.nexogo.model
 
+/**
+ * Preferencias locales (ex-viewmodel.Settings) usadas por AppDataStore.
+ * No es UI de settings Platform.
+ */
 data class AppSettings(
-    val userId: String = "",
-    val language: String = "es", // es, en
+    val language: String = "Español",
     val notificationsEnabled: Boolean = true,
     val appointmentReminders: Boolean = true,
-    val chatNotifications: Boolean = true,
-    val marketingNotifications: Boolean = false,
-    val theme: AppTheme = AppTheme.SYSTEM,
+    val messageNotifications: Boolean = true,
+    val biometricAuth: Boolean = false,
     val autoBackup: Boolean = true,
-    val biometricAuth: Boolean = false
+    val privacyMode: Boolean = false,
+    val darkMode: Boolean = false
 )
 
-enum class AppTheme {
-    LIGHT,
-    DARK,
-    SYSTEM
-}
-
+/**
+ * Categoría de producto para preferencias locales (compatible JSON legacy Long createdAt).
+ */
+data class LocalProductCategory(
+    val id: String = "",
+    val name: String = "",
+    val description: String = "",
+    val isActive: Boolean = true,
+    val createdAt: Long = System.currentTimeMillis()
+)

@@ -100,14 +100,7 @@ class ProfileViewModel : ViewModel() {
                     )
                     
                     println("DEBUG: ProfileViewModel - Usuario creado con rol: ${user.role}")
-                    
-                    // Si es admin@nexogo.com pero no tiene rol ADMIN, corregirlo
-                    if (user.email == "admin@nexogo.com" && user.role != com.example.nexogo.core.models.UserRole.ADMIN) {
-                        println("DEBUG: ProfileViewModel - Admin detectado con rol incorrecto, corrigiendo...")
-                        fixAdminRole()
-                        return@launch
-                    }
-                    
+
                     _user.value = user
                     _state.value = ProfileState.Success
                     println("DEBUG: ProfileViewModel - Perfil cargado exitosamente desde Firestore: ${user.name}")
@@ -274,45 +267,6 @@ class ProfileViewModel : ViewModel() {
     
     fun clearError() {
         _state.value = ProfileState.Success
-    }
-    
-    /**
-     * Corregir el rol del usuario admin si es necesario
-     */
-    fun fixAdminRole() {
-        val uid = auth.currentUser?.uid
-        if (uid == null) return
-        
-        viewModelScope.launch {
-            try {
-                val doc = firestore.collection("usuarios").document(uid).get().await()
-                if (doc.exists()) {
-                    val data = doc.data ?: return@launch
-                    val email = data["correo"] as? String ?: ""
-                    
-                    // Si es admin@nexogo.com, asegurar que tenga rol ADMIN
-                    if (email == "admin@nexogo.com") {
-                        println("DEBUG: ProfileViewModel - Detectado admin@nexogo.com, corrigiendo rol...")
-                        
-                        val updates = hashMapOf<String, Any>(
-                            "rol" to "ADMIN",
-                            "role" to "ADMIN",
-                            "isApproved" to true,
-                            "isProfessional" to false,
-                            "fechaActualizacion" to com.google.firebase.Timestamp.now()
-                        )
-                        
-                        firestore.collection("usuarios").document(uid).update(updates).await()
-                        println("DEBUG: ProfileViewModel - Rol de admin corregido exitosamente")
-                        
-                        // Recargar perfil
-                        loadUserProfile()
-                    }
-                }
-            } catch (e: Exception) {
-                println("DEBUG: ProfileViewModel - Error corrigiendo rol de admin: ${e.message}")
-            }
-        }
     }
 }
 

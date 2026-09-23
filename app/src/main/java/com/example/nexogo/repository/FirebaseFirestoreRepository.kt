@@ -71,7 +71,6 @@ class FirebaseFirestoreRepository @Inject constructor() {
         return try {
             val snapshot = firestore.collection("usuarios")
                 .whereEqualTo("role", role.toString())
-                .whereEqualTo("isApproved", true)
                 .get()
                 .await()
             
