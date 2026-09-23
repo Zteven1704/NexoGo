@@ -42,7 +42,7 @@
 | ID | Sev | Hallazgo | Evidencia | Impacto producción |
 |----|-----|----------|-----------|-------------------|
 | **FR-01** | **CLOSED** | Self-join eliminado + harden update/invite/company create | bootstrap / invite+`inviteId` / ADMIN; catch-all excluye memberships; invitee no reabre PENDING; company.createdBy == uid | Requiere **deploy** |
-| **FR-02** | **CLOSED** | `mensajes/{id}` deny total | `allow read, write: if false` | Requiere **deploy** |
+| **FR-02** | **CLOSED** | `mensajes/{id}` deny total (Chat fuera de Beta-1) | `allow read, write: if false` | Requiere **deploy**; código chat legacy no está en nav Platform |
 | **FR-03** | **WARNING** | `companies/.../settings` create si solo `isSignedIn()` | L140+ | Create de settings sin ser miembro (KI-018) |
 | **FR-04** | **WARNING** | Cualquier miembro ACTIVE puede `write` en `/{subcollection}/{docId}` sin check de rol | catch-all tenant | IAM de app no enforced en servidor (KI-007) |
 | **FR-05** | **WARNING** | Colecciones legacy root (`patients`, `appointments`, `sales`, …) siguen abiertas a `isLegacyStaff()` | legacy block | Superficie de datos legacy aunque UI vet se eliminó |
