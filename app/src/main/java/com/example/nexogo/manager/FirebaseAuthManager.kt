@@ -175,6 +175,8 @@ class FirebaseAuthManager(private val context: Context) {
         }
     }
     
+    /** LEGACY — no forma parte de Auth Platform (Auth + membership ACTIVE + company session). */
+    @Deprecated("Platform auth ignores isApproved")
     suspend fun approveUser(userId: String): Result<Unit> {
         return try {
             firestore.collection("users").document(userId)
@@ -185,6 +187,8 @@ class FirebaseAuthManager(private val context: Context) {
         }
     }
     
+    /** LEGACY — no bloquea login Platform. */
+    @Deprecated("Platform auth ignores isApproved")
     suspend fun rejectUser(userId: String): Result<Unit> {
         return try {
             firestore.collection("users").document(userId)

@@ -88,7 +88,7 @@ class ProfileViewModel : ViewModel() {
                             println("DEBUG: ProfileViewModel - Error parseando rol '$finalRole': ${e.message}")
                             com.example.nexogo.core.models.UserRole.USER
                         },
-                        isApproved = data["isApproved"] as? Boolean ?: false,
+                        isApproved = data["isApproved"] as? Boolean ?: true,
                         fcmToken = data["token"] as? String,
                         isProfessional = data["isProfessional"] as? Boolean ?: false,
                         specialization = data["specialization"] as? String ?: "",

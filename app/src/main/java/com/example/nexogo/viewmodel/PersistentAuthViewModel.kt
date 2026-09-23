@@ -335,31 +335,25 @@ class PersistentAuthViewModel(private val context: Context) : ViewModel() {
         }
     }
 
-    // Admin functions
+    // LEGACY admin helpers — UI UserApproval eliminada del grafo Platform.
+    // Autorización viva: FirebaseAuth + membership ACTIVE + company session.
+    @Deprecated("Platform auth ignores isApproved; use company User Management")
     fun approveUser(userId: String) {
         val user = _pendingUsers.value.find { it.id == userId }
         if (user != null) {
-            // Remove from pending and add as approved
             val updatedPending = _pendingUsers.value.filter { it.id != userId }
             _pendingUsers.value = updatedPending
-            
-            // Save updated pending users to DataStore
             viewModelScope.launch {
                 val gson = com.google.gson.Gson()
-                val json = gson.toJson(updatedPending)
-                dataStore.savePendingUsers(json)
+                dataStore.savePendingUsers(gson.toJson(updatedPending))
             }
-            
-            val approvedUser = user.copy(
-                role = user.role,
-                isApproved = true
-            )
             _uiState.value = _uiState.value.copy(
-                message = "Usuario ${approvedUser.name} aprobado exitosamente"
+                message = "Usuario ${user.name} marcado (legacy isApproved; no afecta acceso Platform)"
             )
         }
     }
 
+    @Deprecated("Platform auth ignores isApproved; use membership REVOKED/SUSPENDED")
     fun rejectUser(userId: String) {
         val updatedPending = _pendingUsers.value.filter { it.id != userId }
         _pendingUsers.value = updatedPending
@@ -372,7 +366,7 @@ class PersistentAuthViewModel(private val context: Context) : ViewModel() {
         }
         
         _uiState.value = _uiState.value.copy(
-            message = "Usuario rechazado"
+            message = "Usuario rechazado (legacy; no afecta Auth Platform)"
         )
     }
 

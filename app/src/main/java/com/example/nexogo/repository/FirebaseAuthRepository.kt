@@ -155,29 +155,23 @@ class FirebaseAuthRepository(
         }
     }
     
+    /**
+     * LEGACY — listado por `usuarios.isApproved == false`.
+     * No forma parte de la autorización Platform (Auth + membership ACTIVE + company session).
+     * Retiene API por compatibilidad; no usar para gates de acceso.
+     */
+    @Deprecated("Platform auth ignores isApproved; use company invites / membership ACTIVE")
     suspend fun getPendingUsers(): Result<List<User>> {
         return try {
-            println("DEBUG: FirebaseAuthRepository - Buscando usuarios con isApproved = false...")
+            println("DEBUG: FirebaseAuthRepository - [LEGACY] getPendingUsers por isApproved=false")
             val snapshot = firestore.collection("usuarios")
                 .whereEqualTo("isApproved", false)
                 .get().await()
             
-            println("DEBUG: FirebaseAuthRepository - Documentos encontrados: ${snapshot.documents.size}")
-            snapshot.documents.forEach { doc ->
-                val data = doc.data
-                println("DEBUG: FirebaseAuthRepository - Documento: ${doc.id}")
-                println("  - isApproved: ${data?.get("isApproved")}")
-                println("  - rol: ${data?.get("rol")}")
-                println("  - nombre: ${data?.get("nombre")}")
-                println("  - correo: ${data?.get("correo")}")
-            }
-            
             val users = snapshot.documents.mapNotNull { doc ->
                 val data = doc.data ?: return@mapNotNull null
                 val rol = data["rol"] as? String ?: "USER"
-                val isApproved = data["isApproved"] as? Boolean ?: false
-                
-                println("DEBUG: FirebaseAuthRepository - Procesando usuario: ${data["nombre"]} - Rol: $rol - Aprobado: $isApproved")
+                val isApproved = data["isApproved"] as? Boolean ?: true
                 
                 User(
                     id = data["uid"] as? String ?: doc.id,
@@ -186,25 +180,26 @@ class FirebaseAuthRepository(
                     role = try {
                         UserRole.valueOf(rol)
                     } catch (e: Exception) {
-                        println("DEBUG: FirebaseAuthRepository - Error parseando rol '$rol': ${e.message}")
                         UserRole.USER
                     },
                     isApproved = isApproved,
                     fcmToken = data["token"] as? String,
                     phone = data["telefono"] as? String ?: "",
                     whatsapp = data["whatsapp"] as? String ?: "",
-                    profileImageUrl = data["profileImageUrl"] as? String ?: getDefaultProfileImage(UserRole.valueOf(rol))
+                    profileImageUrl = data["profileImageUrl"] as? String ?: getDefaultProfileImage(
+                        try { UserRole.valueOf(rol) } catch (_: Exception) { UserRole.USER }
+                    )
                 )
             }
             
-            println("DEBUG: FirebaseAuthRepository - Usuarios pendientes procesados: ${users.size}")
             Result.success(users)
         } catch (e: Exception) {
-            println("DEBUG: FirebaseAuthRepository - Error en getPendingUsers: ${e.message}")
             Result.failure(e)
         }
     }
     
+    /** LEGACY — escribe `usuarios.isApproved`; no afecta login/nav Platform. */
+    @Deprecated("Platform auth ignores isApproved; use User Management invites")
     suspend fun approveUser(userId: String): Result<Unit> {
         return try {
             firestore.collection("usuarios").document(userId)
@@ -221,6 +216,8 @@ class FirebaseAuthRepository(
         }
     }
     
+    /** LEGACY — escribe `usuarios.isApproved`; no bloquea Auth Platform. */
+    @Deprecated("Platform auth ignores isApproved; use membership SUSPENDED/REVOKED")
     suspend fun rejectUser(userId: String): Result<Unit> {
         return try {
             firestore.collection("usuarios").document(userId)
@@ -270,7 +267,7 @@ class FirebaseAuthRepository(
             }
             
             val data = doc.data ?: throw Exception("Datos de usuario no disponibles")
-            val isApproved = data["isApproved"] as? Boolean ?: false
+            val isApproved = data["isApproved"] as? Boolean ?: true // legacy field; not an auth gate
             
             // Debug específico para el rol
             val rolFromFirestore = data["rol"] as? String

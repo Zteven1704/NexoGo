@@ -90,8 +90,8 @@
 
 | ID | Sev | Hallazgo | Evidencia | Impacto |
 |----|-----|----------|-----------|---------|
-| **AU-01** | **CLOSED** | Login no gatea por `isApproved`; Auth → Home; hub por company session | `SimpleLoginScreen` + `FirebaseAuthRepository.loginUser` sin check | Política Platform |
-| **AU-02** | **CLOSED** | Registro sin dependencia funcional de `isApproved` | `RegisterScreen` + `registerUser` escriben campo inerte | KI-003 cerrado |
+| **AU-01** | **CLOSED** | Login no gatea por `isApproved`; Auth → Home; hub por company session | `SimpleLoginScreen` + `loginUser` sin check; gates eliminados | Política Platform |
+| **AU-02** | **CLOSED** | Registro sin dependencia funcional de `isApproved` | `RegisterScreen` + `registerUser` escriben campo inerte `true` | KI-003 cerrado |
 | **AU-03** | **WARNING** | `applicationId` / package = `com.example.nexogo` | `google-services.json` + `build.gradle.kts` | No apto Play Store; mezcla percepción “demo” |
 | **AU-04** | **WARNING** | Proyecto Firebase único en cliente: `nexogo-82003` | `google-services.json` | Sin evidencia de separación pilot/prod en repo |
 | **AU-05** | **WARNING** | Sin App Check / MFA en producto | Beta-1 scope; release plan | Abuso de API / credenciales robadas |
@@ -100,6 +100,17 @@
 | **AU-08** | **OK** | Sesión post-login exige company ACTIVE en hub (app) | `CompanySessionManager.bindCompany` | Cierre de “fail-open” de producto |
 
 **Política Auth Platform (oficial):** FirebaseAuth `currentUser` + membership **ACTIVE** + company session válida. `isApproved` = legacy only.
+
+### Inventario `isApproved` / `approved` (AU-01/02)
+
+| Clasificación | Referencias |
+|---------------|-------------|
+| **Activas (autorización)** | **Ninguna.** Splash→Login→Home; hub gate = `CompanySession` + membership ACTIVE. |
+| **Legacy (retenidas, no gate)** | `User.isApproved`, `AppDataStore` cache, lectura/escritura Firestore `usuarios.isApproved`, `@Deprecated` `getPendingUsers`/`approveUser`/`rejectUser` (`FirebaseAuthRepository`, `FirebaseAuthManager`, `PersistentAuthViewModel`), seeds (`MockDataGenerator`, `FirebaseTestData`, `FirebaseFirestoreManager`), `ProfileViewModel` map field |
+| **Company (otro significado)** | `CompanyMembership.approvedBy` — auditoría de activación tenant; **no** es `isApproved` |
+| **Eliminables / ya fuera del grafo** | `UserApprovalScreen`, `AdminScreen` approval UI, `modules/auth`, `modules/profile` (borrados del árbol navegable) |
+| **Docs históricos** | `SISTEMA_AUTENTICACION_ESTADO_ACTUAL.md`, `BETA_HARDENING_REPORT`, claims teóricos `flags.approved` en docs arquitectura — no código vivo |
+| **No relacionado** | `approvalStatus` en `RECORDS_MODULE_MIGRATION` (docs de tipología); billing `approved` en `BILLING_ARCHITECTURE` |
 
 ---
 
