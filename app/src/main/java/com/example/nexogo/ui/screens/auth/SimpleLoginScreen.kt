@@ -55,24 +55,33 @@ fun SimpleLoginScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // Logo y título
+        // Identidad NexoGo
         Text(
-            text = "🐾 NexoGo",
+            text = "NexoGo",
             style = MaterialTheme.typography.headlineLarge,
             color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.Bold
         )
-        
+
         Spacer(modifier = Modifier.height(8.dp))
-        
+
         Text(
-            text = "Sistema de Gestión Veterinaria",
+            text = "Organiza. Gestiona. Conecta.",
             style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.SemiBold
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Text(
+            text = "Personas + Información + Documentos + Procesos",
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        
+
         Spacer(modifier = Modifier.height(48.dp))
-        
+
         // Formulario de login
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -301,7 +310,7 @@ fun SimpleLoginScreen(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Sistema de gestión veterinaria completo",
+                    text = "Plataforma de gestión empresarial",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

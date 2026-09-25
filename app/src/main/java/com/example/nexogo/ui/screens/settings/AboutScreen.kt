@@ -76,7 +76,7 @@ fun AboutScreen(
             )
             
             Text(
-                text = "Sistema de Gestión Veterinaria",
+                text = "Organiza. Gestiona. Conecta.",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -109,7 +109,7 @@ fun AboutScreen(
                     Spacer(modifier = Modifier.height(12.dp))
                     
                     Text(
-                        text = "NexoGo es una aplicación integral para la gestión de clínicas veterinarias que conecta a profesionales de la salud animal con los dueños de mascotas, facilitando la comunicación, el agendamiento de citas y el seguimiento del historial clínico.",
+                        text = "NexoGo es una plataforma integral para organizar y gestionar la información, documentos y procesos de una empresa, facilitando la administración de clientes, expedientes, usuarios y recursos desde un solo lugar.",
                         style = MaterialTheme.typography.bodyMedium,
                         textAlign = TextAlign.Justify
                     )
@@ -136,15 +136,15 @@ fun AboutScreen(
                     Spacer(modifier = Modifier.height(12.dp))
                     
                     val features = listOf(
-                        "📅 Agendamiento de citas inteligente",
-                        "📋 Historial clínico completo",
-                        "💬 Chat en tiempo real",
-                        "📦 Gestión de inventario",
-                        "👥 Gestión de pacientes",
-                        "🔔 Notificaciones push",
-                        "📱 Interfaz moderna y intuitiva",
-                        "🔒 Seguridad y privacidad"
-                    )
+    "🏢 Gestión de empresas",
+    "👥 Gestión de clientes",
+    "📁 Expedientes organizados",
+    "📄 Gestión de documentos",
+    "👤 Usuarios y roles",
+    "🔐 Permisos y control de acceso",
+    "⚙️ Configuración y administración",
+    "📱 Interfaz moderna e intuitiva"
+)
                     
                     features.forEach { feature ->
                         Row(
