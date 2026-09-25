@@ -101,12 +101,19 @@ class CreateCompanyFlow(
                     )
                 }
             } else {
+                val err = result.exceptionOrNull()?.message.orEmpty()
+                val friendly = when {
+                    err.contains("PERMISSION_DENIED", ignoreCase = true) ->
+                        "Sin permiso para crear empresa. Publica firestore.rules en Firebase Console (nexogo-82003) e inicia sesión de nuevo."
+                    err.contains("Sesión Firebase", ignoreCase = true) ->
+                        "Sesión Firebase inválida — cierra sesión e inicia de nuevo."
+                    else -> err.ifBlank { "No se pudo crear la empresa" }
+                }
                 _ui.update {
                     it.copy(
                         step = OnboardingStep.ADMIN_SETUP,
                         isSubmitting = false,
-                        error = result.exceptionOrNull()?.message
-                            ?: "No se pudo crear la empresa"
+                        error = friendly
                     )
                 }
             }

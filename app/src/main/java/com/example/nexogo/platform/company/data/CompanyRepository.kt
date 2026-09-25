@@ -8,6 +8,7 @@ import com.example.nexogo.platform.company.model.CompanySettings
 import com.example.nexogo.platform.company.model.CompanyStatus
 import com.example.nexogo.platform.company.model.MembershipStatus
 import com.google.firebase.Timestamp
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
@@ -44,6 +45,17 @@ class CompanyRepository(
         adminTitle: String = "Administrador"
     ): Result<Company> {
         return try {
+            // Rules FR-01: createdBy must equal FirebaseAuth.uid (not a stale DataStore id).
+            val authUid = FirebaseAuth.getInstance().currentUser?.uid
+                ?: return Result.failure(IllegalStateException("Sesión Firebase requerida para crear empresa"))
+            val ownerUid = authUid
+            if (createdByUserId.isNotBlank() && createdByUserId != authUid) {
+                android.util.Log.w(
+                    "CompanyRepository",
+                    "createdByUserId=$createdByUserId != authUid=$authUid — usando authUid"
+                )
+            }
+
             val companyId = "cmp_${UUID.randomUUID().toString().replace("-", "").take(20)}"
             val now = Timestamp.now()
             val company = Company(
@@ -57,19 +69,36 @@ class CompanyRepository(
                 limits = limits,
                 createdAt = now,
                 updatedAt = now,
-                createdBy = createdByUserId
+                createdBy = ownerUid
             )
 
             val batch = firestore.batch()
 
-            batch.set(companiesCollection().document(companyId), company)
+            // Explicit map so rules always see id + createdBy as strings (enums as names).
+            batch.set(
+                companiesCollection().document(companyId),
+                hashMapOf<String, Any>(
+                    "id" to companyId,
+                    "name" to company.name,
+                    "legalName" to company.legalName,
+                    "taxId" to company.taxId,
+                    "status" to CompanyStatus.ACTIVE.name,
+                    "planId" to company.planId,
+                    "industryPacks" to company.industryPacks,
+                    "primaryContactEmail" to company.primaryContactEmail,
+                    "phone" to company.phone,
+                    "createdAt" to now,
+                    "updatedAt" to now,
+                    "createdBy" to ownerUid
+                )
+            )
 
             val settings = CompanySettings(
                 companyId = companyId,
                 aiMonthlyRequestQuota = limits.maxAiRequestsMonth,
                 documentMaxUploadMb = 25,
                 updatedAt = now,
-                updatedBy = createdByUserId
+                updatedBy = ownerUid
             )
             batch.set(
                 companiesCollection()
@@ -79,48 +108,49 @@ class CompanyRepository(
                 settings
             )
 
-            val index = CompanyIndex(
-                companyId = companyId,
-                name = company.name,
-                status = company.status,
-                planId = company.planId,
-                industryPacks = company.industryPacks,
-                ownerUserId = createdByUserId,
-                createdAt = now
-            )
-            batch.set(indexCollection().document(companyId), index)
-
-            if (createAdminMembership && createdByUserId.isNotBlank()) {
-                val membership = CompanyMembership(
-                    userId = createdByUserId,
-                    companyId = companyId,
-                    roleCodes = listOf(CompanyRoleCodes.ADMIN),
-                    status = MembershipStatus.ACTIVE,
-                    isDefault = true,
-                    title = adminTitle.trim().ifBlank { "Administrador" },
-                    invitedBy = createdByUserId,
-                    approvedBy = createdByUserId,
-                    createdAt = now,
-                    updatedAt = now
+            batch.set(
+                indexCollection().document(companyId),
+                hashMapOf<String, Any>(
+                    "companyId" to companyId,
+                    "name" to company.name,
+                    "status" to CompanyStatus.ACTIVE.name,
+                    "planId" to company.planId,
+                    "industryPacks" to company.industryPacks,
+                    "ownerUserId" to ownerUid,
+                    "createdAt" to now
                 )
+            )
+
+            if (createAdminMembership) {
                 batch.set(
                     companiesCollection()
                         .document(companyId)
                         .collection(CompanyPaths.MEMBERSHIPS)
-                        .document(createdByUserId),
-                    membership
+                        .document(ownerUid),
+                    hashMapOf<String, Any>(
+                        "userId" to ownerUid,
+                        "companyId" to companyId,
+                        "roleCodes" to listOf(CompanyRoleCodes.ADMIN),
+                        "status" to MembershipStatus.ACTIVE.name,
+                        "isDefault" to true,
+                        "title" to adminTitle.trim().ifBlank { "Administrador" },
+                        "invitedBy" to ownerUid,
+                        "approvedBy" to ownerUid,
+                        "createdAt" to now,
+                        "updatedAt" to now
+                    )
                 )
                 batch.set(
                     firestore.collection(CompanyPaths.USERS)
-                        .document(createdByUserId)
+                        .document(ownerUid)
                         .collection(CompanyPaths.USER_COMPANY_MEMBERSHIPS)
                         .document(companyId),
-                    UserCompanyRef(
-                        companyId = companyId,
-                        companyName = company.name,
-                        status = MembershipStatus.ACTIVE.name,
-                        roleCodes = listOf(CompanyRoleCodes.ADMIN),
-                        isDefault = true
+                    hashMapOf<String, Any>(
+                        "companyId" to companyId,
+                        "companyName" to company.name,
+                        "status" to MembershipStatus.ACTIVE.name,
+                        "roleCodes" to listOf(CompanyRoleCodes.ADMIN),
+                        "isDefault" to true
                     )
                 )
             }

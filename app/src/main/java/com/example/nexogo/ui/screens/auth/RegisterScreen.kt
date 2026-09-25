@@ -93,17 +93,21 @@ fun RegisterScreen(
                     }
                     .onFailure { exception ->
                         println("DEBUG: RegisterScreen - Error en registro: ${exception.message}")
+                        val msg = exception.message.orEmpty().lowercase()
                         errorMessage = when {
-                            exception.message?.contains("email-already-in-use") == true -> 
+                            exception is com.google.firebase.auth.FirebaseAuthUserCollisionException
+                                || msg.contains("email-already-in-use")
+                                || msg.contains("already in use") ->
                                 "Este email ya está registrado. Intenta iniciar sesión."
-                            exception.message?.contains("weak-password") == true -> 
+                            msg.contains("weak-password") ->
                                 "La contraseña es muy débil. Usa al menos 6 caracteres."
-                            exception.message?.contains("invalid-email") == true -> 
+                            msg.contains("invalid-email") ->
                                 "Email inválido."
+                            msg.contains("network") ->
+                                "Error de conexión. Verifica tu internet."
                             else -> "Error al registrar usuario. Intenta nuevamente."
                         }
                         println("DEBUG: RegisterScreen - Estableciendo errorMessage: $errorMessage")
-                        println("DEBUG: RegisterScreen - Estableciendo isLoading = false")
                         isLoading = false
                     }
             } catch (e: Exception) {

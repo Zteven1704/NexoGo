@@ -229,14 +229,21 @@ fun SimpleLoginScreen(
                            }
                        } catch (e: Exception) {
                            println("DEBUG: SimpleLoginScreen - Error en login: ${e.message}")
+                           val msg = e.message.orEmpty().lowercase()
                            errorMessage = when {
-                               e.message?.contains("user-not-found") == true ->
+                               e is com.google.firebase.auth.FirebaseAuthInvalidUserException
+                                   || msg.contains("user-not-found")
+                                   || msg.contains("no user record") ->
                                    "Usuario no encontrado. Verifica tu email"
-                               e.message?.contains("wrong-password") == true ->
-                                   "Contraseña incorrecta"
-                               e.message?.contains("invalid-email") == true ->
+                               e is com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
+                                   || msg.contains("wrong-password")
+                                   || msg.contains("credential is incorrect")
+                                   || msg.contains("malformed or has expired")
+                                   || msg.contains("invalid-credential") ->
+                                   "Email o contraseña incorrectos. Si olvidaste la clave, restablécela en Firebase Console o usa otro email."
+                               msg.contains("invalid-email") ->
                                    "Formato de email inválido"
-                               e.message?.contains("network") == true ->
+                               msg.contains("network") ->
                                    "Error de conexión. Verifica tu internet"
                                else -> e.message ?: "Error al iniciar sesión"
                            }
